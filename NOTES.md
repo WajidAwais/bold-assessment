@@ -47,7 +47,7 @@ During planning we left the import open, reasoning that the worst case was "anyo
 **What I deliberately kept:**
 - I ran the design grilling, and I made every rule decision: identity by email, first-seen wins, ID Collision, the date formats, the soft salary, RLS over application filters, and the four statuses. The agents implemented those rules; they didn't choose them.
 
-**Concrete corrections:**
+**Concrete corrections through AI-code-review:**
 - **Open import → Admin-only.** See above.
 - **Owner locked out by FORCE RLS.** A non-superuser owner would have seen zero rows and failed every import. The fix was the owner-only policy. Also, the compose superuser bypasses RLS entirely, so reads had to move to `techforce_app`.
 - **csv field limit.** Python's `csv` caps fields at 128 KiB, so a legal 5 MB file with one long note returned a 500. The exactly-5 MB boundary test found it.
@@ -55,6 +55,10 @@ During planning we left the import open, reasoning that the worst case was "anyo
 - **Bad test fixtures.** An accent test was wrong: `Tomas` matched `tomas.herrera@gmail.com` through the email column. Hand-copied CSV rows had also drifted from the file. Fixtures are now copied verbatim and checked with grep.
 - **UI bug found by driving the app.** The build didn't catch it: going back to earlier filters revived their old page number.
 - **Stale e2e totals.** The e2e totals were written against a dirty shared database (Caleb showed 19 Candidates). The clean run proved the real number is 18.
+
+**Manually Identified:**
+- Identified that there were no make scripts that make the setup easier to run on a fresh machine.
+
 
 ## What I'd do next
 

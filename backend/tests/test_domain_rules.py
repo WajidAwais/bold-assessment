@@ -333,7 +333,12 @@ def test_names_in_any_script_are_accepted_and_nfc_normalized(record, first_name,
         (  # variant of C-1007: a 101-character last name
             f"C-1007,Grace,{'L' * 101},grace.lim@gmail.com,+63 917 555 0122,PH-MNL,"
             "QA Engineer,45000,2026-05-23,Active,JobStreet,",
-            "invalid last_name",
+            "last_name too long",
+        ),
+        (  # variant of C-1007: a 101-character first name
+            f"C-1007,{'G' * 101},Lim,grace.lim@gmail.com,+63 917 555 0122,PH-MNL,"
+            "QA Engineer,45000,2026-05-23,Active,JobStreet,",
+            "first_name too long",
         ),
     ],
 )

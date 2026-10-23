@@ -144,7 +144,7 @@ A single-page Recruiter view shows the scoped table with search, a status filter
   - `merged`: count of rows Merged.
   - `rejected`: a list of `{row, candidate_id, reason}`.
   - `merges`: a list of `{row, candidate_id, merged_into}`.
-- `row` is the 1-based CSV record number, header excluded. A `reason` joins every validation error with `; `, using fixed prefixes: `missing <field>`, `invalid email`, `unknown region`, `unknown status`, `invalid date`, `invalid characters in <field>`, `candidate_id collision`.
+- `row` is the 1-based CSV record number, header excluded. A `reason` joins every validation error with `; `, using fixed prefixes: `missing <field>`, `invalid email`, `unknown region`, `unknown status`, `invalid date`, `invalid characters in <field>`, `<field> too long`, `candidate_id collision`.
 
 ### Read API contract
 

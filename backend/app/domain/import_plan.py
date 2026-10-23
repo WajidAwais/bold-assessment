@@ -131,6 +131,8 @@ def _reason(error: Mapping[str, Any]) -> str:
         return f"missing {column}"
     if error["type"] == "invalid_characters":
         return f"invalid characters in {column}"
+    if error["type"] == "string_too_long":
+        return f"{column} too long"
     return _INVALID_REASONS.get(field, f"invalid {column}")
 
 

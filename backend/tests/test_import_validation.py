@@ -53,8 +53,8 @@ async def test_the_real_export_rejects_each_invalid_row_with_every_reason(
     validation_rejections = [
         (r["row"], r["candidate_id"], r["reason"])
         for r in report["rejected"]
-        # Ticket 04 replaces the interim duplicate rule with Merge / ID Collision.
-        if r["reason"] != "duplicate candidate"
+        # ID Collisions are covered with Merges in test_import_merge.py.
+        if r["reason"] != "candidate_id collision"
     ]
     assert validation_rejections == [
         (34, "C-1033", "invalid email"),

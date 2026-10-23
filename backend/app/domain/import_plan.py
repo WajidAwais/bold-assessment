@@ -5,12 +5,19 @@ Import Report entries. Every row ends up in exactly one bucket: new Candidate,
 Merge or Rejection. Nothing is dropped silently.
 
 A row that fails the Candidate model is rejected with every reason, each using
-a fixed prefix. Until ticket 04 brings first-seen Merge and ID Collision
-detection, a row whose email or Legacy ID is already taken is rejected as a
-duplicate.
+a fixed prefix. A valid row is then placed by identity (ADR-0001):
+
+- its email belongs to a Candidate already seen (in the database or earlier in
+  the file): it Merges into that Candidate, whatever its Legacy ID, and only
+  fills that Candidate's blank fields;
+- otherwise, its Legacy ID belongs to another Candidate: ID Collision;
+- otherwise it is a new Candidate.
+
+The database counts as first-seen, so planning a file against the result of
+importing it creates nothing and fills nothing.
 """
 
-from collections.abc import Iterable, Mapping, Set
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -33,6 +40,12 @@ CSV_COLUMNS: Mapping[str, str] = {
     "source": "source",
     "notes": "notes",
 }
+
+
+# The Candidate fields a Merge may fill. Required fields are never blank.
+FILLABLE_FIELDS: tuple[str, ...] = tuple(
+    name for name, info in Candidate.model_fields.items() if not info.is_required()
+)
 
 
 @dataclass(frozen=True)
@@ -63,19 +76,30 @@ class Merge:
 
 
 @dataclass(frozen=True)
-class ExistingCandidates:
-    """What the database already holds, looked up in bulk before planning."""
+class BlankFill:
+    """Values a Merge adds to the null fields of a stored Candidate."""
 
-    emails: Set[str] = frozenset()
-    legacy_ids: Set[str] = frozenset()
+    email: str
+    values: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class ExistingCandidates:
+    """The stored Candidates sharing an email or Legacy ID with the file,
+    looked up in bulk before planning."""
+
+    candidates: Sequence[Candidate] = ()
 
 
 @dataclass
 class ImportPlan:
     new_candidates: list[Candidate] = field(default_factory=list)
+    blank_fills: list[BlankFill] = field(default_factory=list)
     merges: list[Merge] = field(default_factory=list)
     rejections: list[Rejection] = field(default_factory=list)
 
+
+ID_COLLISION = "candidate_id collision"
 
 # Candidate field -> CSV column, so reasons name the column the Admin must fix.
 _COLUMN_FOR_FIELD: Mapping[str, str] = {field: column for column, field in CSV_COLUMNS.items()}
@@ -118,19 +142,51 @@ def lookup_keys(rows: Iterable[ImportRow]) -> tuple[set[str], set[str]]:
 
 def plan_import(rows: Iterable[ImportRow], existing: ExistingCandidates) -> ImportPlan:
     plan = ImportPlan()
-    seen_emails = set(existing.emails)
-    seen_legacy_ids = set(existing.legacy_ids)
+    stored = {c.email: c for c in existing.candidates}
+    # email -> the Candidate it identifies, with the blanks filled so far
+    first_seen: dict[str, Candidate] = dict(stored)
+    # Legacy ID -> email of the Candidate holding it
+    legacy_id_owners = {c.legacy_id: c.email for c in existing.candidates}
+    new_emails: list[str] = []
 
     for row in rows:
         parsed = parse_candidate(row)
         if isinstance(parsed, Rejection):
             plan.rejections.append(parsed)
             continue
-        if parsed.email in seen_emails or parsed.legacy_id in seen_legacy_ids:
-            plan.rejections.append(Rejection(row.row, row.candidate_id, "duplicate candidate"))
+        if (target := first_seen.get(parsed.email)) is not None:
+            first_seen[parsed.email] = fill_blanks(target, parsed)
+            plan.merges.append(Merge(row.row, row.candidate_id, target.legacy_id))
             continue
-        seen_emails.add(parsed.email)
-        seen_legacy_ids.add(parsed.legacy_id)
-        plan.new_candidates.append(parsed)
+        if parsed.legacy_id in legacy_id_owners:
+            plan.rejections.append(Rejection(row.row, row.candidate_id, ID_COLLISION))
+            continue
+        first_seen[parsed.email] = parsed
+        legacy_id_owners[parsed.legacy_id] = parsed.email
+        new_emails.append(parsed.email)
 
+    plan.new_candidates = [first_seen[email] for email in new_emails]
+    plan.blank_fills = [
+        BlankFill(email, _filled_values(before, first_seen[email]))
+        for email, before in stored.items()
+        if first_seen[email] != before
+    ]
     return plan
+
+
+def fill_blanks(target: Candidate, other: Candidate) -> Candidate:
+    """``target`` with its null fields taken from ``other``; nothing else changes."""
+    fills = {
+        name: getattr(other, name)
+        for name in FILLABLE_FIELDS
+        if getattr(target, name) is None and getattr(other, name) is not None
+    }
+    return target.model_copy(update=fills) if fills else target
+
+
+def _filled_values(before: Candidate, after: Candidate) -> dict[str, Any]:
+    return {
+        name: getattr(after, name)
+        for name in FILLABLE_FIELDS
+        if getattr(before, name) != getattr(after, name)
+    }

@@ -2,7 +2,7 @@
 
 Pure, no I/O. Rows are taken from candidates_import.csv (variants are marked)
 and run through ``plan_import``, with what the database already holds passed
-in as ``ExistingCandidates``.
+in as a list of Candidates.
 """
 
 import csv
@@ -11,7 +11,6 @@ import io
 from app.domain.candidate import Candidate
 from app.domain.import_plan import (
     BlankFill,
-    ExistingCandidates,
     ImportRow,
     Merge,
     Rejection,
@@ -75,7 +74,7 @@ def candidate(record: str) -> Candidate:
 
 
 def test_a_later_row_with_the_same_email_merges_into_the_first_seen_candidate():
-    plan = plan_import(rows(ROW_C1001, ROW_C1031), ExistingCandidates())
+    plan = plan_import(rows(ROW_C1001, ROW_C1031), [])
 
     assert [c.legacy_id for c in plan.new_candidates] == ["C-1001"]
     assert plan.merges == [Merge(row=2, candidate_id="C-1031", merged_into="C-1001")]
@@ -83,7 +82,7 @@ def test_a_later_row_with_the_same_email_merges_into_the_first_seen_candidate():
 
 
 def test_a_merged_row_fills_only_the_blanks_of_the_first_seen_candidate():
-    plan = plan_import(rows(ROW_C1016, ROW_C1032), ExistingCandidates())
+    plan = plan_import(rows(ROW_C1016, ROW_C1032), [])
 
     (amara,) = plan.new_candidates
     # First-seen values win, even over the degraded "A."
@@ -100,7 +99,7 @@ def test_a_merged_row_fills_only_the_blanks_of_the_first_seen_candidate():
 
 
 def test_a_new_person_reusing_anothers_legacy_id_is_an_id_collision():
-    plan = plan_import(rows(ROW_C1010, ROW_C1010_BECCA), ExistingCandidates())
+    plan = plan_import(rows(ROW_C1010, ROW_C1010_BECCA), [])
 
     assert [c.email for c in plan.new_candidates] == ["sofia.cardenas@hotmail.com"]
     assert plan.rejections == [
@@ -113,7 +112,7 @@ def test_email_wins_over_a_legacy_id_that_belongs_to_someone_else():
     # Variant: Alicia's email carrying Sofía's Legacy ID
     alicia_as_c1010 = ROW_C1031.replace("C-1031", "C-1010", 1)
 
-    plan = plan_import(rows(ROW_C1001, ROW_C1010, alicia_as_c1010), ExistingCandidates())
+    plan = plan_import(rows(ROW_C1001, ROW_C1010, alicia_as_c1010), [])
 
     assert [c.legacy_id for c in plan.new_candidates] == ["C-1001", "C-1010"]
     assert plan.merges == [Merge(row=3, candidate_id="C-1010", merged_into="C-1001")]
@@ -124,7 +123,7 @@ def test_email_wins_over_a_legacy_id_that_belongs_to_someone_else():
 
 
 def test_a_row_matching_a_stored_candidate_merges_into_it_and_creates_nothing():
-    existing = ExistingCandidates([candidate(ROW_C1001)])
+    existing = [candidate(ROW_C1001)]
 
     plan = plan_import(rows(ROW_C1001, ROW_C1031), existing)
 
@@ -137,7 +136,7 @@ def test_a_row_matching_a_stored_candidate_merges_into_it_and_creates_nothing():
 
 
 def test_a_merge_into_a_stored_candidate_fills_only_its_blanks():
-    existing = ExistingCandidates([candidate(ROW_C1016)])
+    existing = [candidate(ROW_C1016)]
 
     plan = plan_import(rows(ROW_C1032), existing)
 
@@ -148,7 +147,7 @@ def test_a_merge_into_a_stored_candidate_fills_only_its_blanks():
 
 
 def test_a_new_person_reusing_a_stored_legacy_id_is_an_id_collision():
-    existing = ExistingCandidates([candidate(ROW_C1010)])
+    existing = [candidate(ROW_C1010)]
 
     plan = plan_import(rows(ROW_C1010_BECCA), existing)
 
@@ -160,9 +159,9 @@ def test_a_new_person_reusing_a_stored_legacy_id_is_an_id_collision():
 
 def test_planning_the_same_rows_against_their_own_result_changes_nothing():
     records = (ROW_C1001, ROW_C1016, ROW_C1010, ROW_C1031, ROW_C1032, ROW_C1010_BECCA)
-    first = plan_import(rows(*records), ExistingCandidates())
+    first = plan_import(rows(*records), [])
 
-    again = plan_import(rows(*records), ExistingCandidates(first.new_candidates))
+    again = plan_import(rows(*records), first.new_candidates)
 
     assert again.new_candidates == []
     assert again.blank_fills == []

@@ -83,14 +83,6 @@ class BlankFill:
     values: Mapping[str, Any]
 
 
-@dataclass(frozen=True)
-class ExistingCandidates:
-    """The stored Candidates sharing an email or Legacy ID with the file,
-    looked up in bulk before planning."""
-
-    candidates: Sequence[Candidate] = ()
-
-
 @dataclass
 class ImportPlan:
     new_candidates: list[Candidate] = field(default_factory=list)
@@ -142,13 +134,15 @@ def lookup_keys(rows: Iterable[ImportRow]) -> tuple[set[str], set[str]]:
     return {c.email for c in parsed}, {c.legacy_id for c in parsed}
 
 
-def plan_import(rows: Iterable[ImportRow], existing: ExistingCandidates) -> ImportPlan:
+def plan_import(rows: Iterable[ImportRow], existing: Sequence[Candidate]) -> ImportPlan:
+    """Place every row. ``existing`` holds the stored Candidates sharing an
+    email or Legacy ID with the file, looked up in bulk beforehand."""
     plan = ImportPlan()
-    stored = {c.email: c for c in existing.candidates}
+    stored = {c.email: c for c in existing}
     # email -> the Candidate it identifies, with the blanks filled so far
     first_seen: dict[str, Candidate] = dict(stored)
     # Legacy ID -> email of the Candidate holding it
-    legacy_id_owners = {c.legacy_id: c.email for c in existing.candidates}
+    legacy_id_owners = {c.legacy_id: c.email for c in existing}
     new_emails: list[str] = []
 
     for row in rows:

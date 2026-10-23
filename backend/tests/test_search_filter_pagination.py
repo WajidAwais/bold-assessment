@@ -129,3 +129,90 @@ async def test_an_invalid_status_is_a_validation_error(candidates, client, statu
     response = await _list(client, DANA, status=status)
 
     assert response.status_code == 422
+
+
+# --- Pagination and the scoped total -------------------------------------------
+
+
+def _row(legacy_id: str, region: str, applied_date: str) -> str:
+    n = legacy_id.removeprefix("C-")
+    last_name = "".join("abcdefghij"[int(digit)] for digit in n).title()  # names are letters only
+    return (
+        f"{legacy_id},Pat,{last_name},pat.{n}@gmail.com,,{region},"
+        f"QA Engineer,,{applied_date},active,,"
+    )
+
+
+async def _import(client: httpx.AsyncClient, rows: list[str]) -> None:
+    csv_bytes = "\n".join([HEADER, *rows]).encode("utf-8")
+    response = await client.post(
+        "/api/v1/candidates/import",
+        files={"file": ("candidates_import.csv", csv_bytes, "text/csv")},
+    )
+    assert response.json()["imported"] == len(rows)
+
+
+async def test_pages_are_ordered_newest_first_with_blank_dates_last_then_by_id(client):
+    await _import(
+        client,
+        [
+            _row("C-2001", "US-MW", "2026-06-01"),
+            _row("C-2002", "US-NE", ""),
+            _row("C-2003", "US-MW", "2026-06-10"),
+            _row("C-2004", "US-NE", "2026-06-01"),
+            _row("C-2005", "US-MW", ""),
+            _row("C-2006", "PH-MNL", "2026-07-01"),  # newest, but outside Caleb's Scope
+        ],
+    )
+
+    pages = [await _list(client, CALEB, page=page, page_size=2) for page in (1, 2, 3, 4)]
+
+    assert [_ids(page) for page in pages] == [
+        ["C-2003", "C-2001"],
+        ["C-2004", "C-2002"],
+        ["C-2005"],
+        [],
+    ]
+    assert [page.json()["total"] for page in pages] == [5, 5, 5, 5]
+    assert [(page.json()["page"], page.json()["page_size"]) for page in pages] == [
+        (1, 2),
+        (2, 2),
+        (3, 2),
+        (4, 2),
+    ]
+
+
+async def test_page_size_defaults_to_25_and_total_counts_the_whole_scope(client):
+    await _import(client, [_row(f"C-{3000 + i}", "US-MW", "") for i in range(30)])
+    await _import(client, [_row(f"C-{4000 + i}", "CO-BOG", "") for i in range(3)])
+
+    first = (await _list(client, CALEB)).json()
+    second = (await _list(client, CALEB, page=2)).json()
+
+    assert (len(first["items"]), first["total"], first["page_size"]) == (25, 30, 25)
+    assert (len(second["items"]), second["total"]) == (5, 30)
+    assert (await _list(client, MARISOL)).json()["total"] == 3
+
+
+async def test_total_counts_only_what_search_and_status_leave(candidates, client):
+    body = (await _list(client, DANA, search="full-stack", page_size=1)).json()
+
+    assert len(body["items"]) == 1
+    assert body["total"] == 2  # C-1001 and C-1006
+
+
+@pytest.mark.parametrize(
+    "params",
+    [{"page": 0}, {"page": -1}, {"page_size": 0}, {"page_size": 101}, {"page": "x"}],
+)
+async def test_out_of_range_paging_is_a_validation_error(candidates, client, params):
+    response = await _list(client, DANA, **params)
+
+    assert response.status_code == 422
+
+
+async def test_page_size_100_is_allowed(candidates, client):
+    response = await _list(client, DANA, page_size=100)
+
+    assert response.status_code == 200
+    assert response.json()["page_size"] == 100

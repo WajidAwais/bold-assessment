@@ -4,12 +4,12 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Monorepo with backend and frontend. Compose runs Postgres 16, the API (runs `alembic upgrade head` on start, then serves) and the Vite dev server (proxies `/api`). A `.env.example` holds the dev defaults.
-- [ ] An Alembic migration creates `candidates` (surrogate key, unique email, unique Legacy ID, canonical Region and status constraints) and `recruiters`, and seeds the 5 Recruiters from the roster.
-- [ ] `POST /api/v1/candidates/import` (multipart `file`) inserts Candidates in batches inside a single transaction (no row-at-a-time writes) using SQLAlchemy Core, and returns an Import Report `{imported, merged, rejected, merges}`.
-- [ ] `GET /api/v1/recruiters` returns id, full name, role and Regions.
-- [ ] `GET /api/v1/candidates` returns `{items, total, page, page_size}` with the agreed item fields (no salary, phone or notes). It is temporarily unscoped; Scope arrives in ticket 02.
-- [ ] The React table shows name, email, region, role, status and applied date. `Nguyễn Thị Hoa` renders correctly.
-- [ ] Test harness: a separate test database on the compose Postgres, migrations run once per session, `candidates` truncated per test, `pytest-asyncio` + `httpx.AsyncClient`. One passing test imports rows and lists them.
+- [x] Monorepo with backend and frontend. Compose runs Postgres 16, the API (runs `alembic upgrade head` on start, then serves) and the Vite dev server (proxies `/api`). A `.env.example` holds the dev defaults.
+- [x] An Alembic migration creates `candidates` (surrogate key, unique email, unique Legacy ID, canonical Region and status constraints) and `recruiters`, and seeds the 5 Recruiters from the roster.
+- [x] `POST /api/v1/candidates/import` (multipart `file`) inserts Candidates in batches inside a single transaction (no row-at-a-time writes) using SQLAlchemy Core, and returns an Import Report `{imported, merged, rejected, merges}`.
+- [x] `GET /api/v1/recruiters` returns id, full name, role and Regions.
+- [x] `GET /api/v1/candidates` returns `{items, total, page, page_size}` with the agreed item fields (no salary, phone or notes). It is temporarily unscoped; Scope arrives in ticket 02.
+- [x] The React table shows name, email, region, role, status and applied date. `Nguyễn Thị Hoa` renders correctly.
+- [x] Test harness: a separate test database on the compose Postgres, migrations run once per session, `candidates` truncated per test, `pytest-asyncio` + `httpx.AsyncClient`. One passing test imports rows and lists them.

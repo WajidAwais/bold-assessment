@@ -35,10 +35,10 @@ _Avoid_: Skipped row, dropped row
 ### Access
 
 **Recruiter**:
-A user who sees only Candidates in their assigned Regions.
+A user who sees only the Candidates in their Scope.
 
 **Admin**:
-A user whose assigned regions are `*`, giving visibility of every Candidate.
+A Recruiter whose role is admin, giving visibility of every Candidate and the right to import. The roster shows an Admin's Regions as `*`.
 _Avoid_: Superuser
 
 **Scope**:

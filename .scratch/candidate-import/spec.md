@@ -1,6 +1,6 @@
 # Spec: Candidate Import & Scoped Recruiter View
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
@@ -57,7 +57,7 @@ A single-page Recruiter view shows the scoped table with search, a status filter
 31. As an Admin, I want salaries that aren't numbers (`negotiable`) stored as null without rejecting the row, so that a valid Candidate isn't lost over a soft field.
 32. As a Recruiter, I want names with any script and diacritics (`Nguyễn Thị Hoa`, `Tomás`, `Jürgen`) accepted and NFC-normalized, so that people's names are respected.
 33. As an Admin, I want names containing non-name characters (e.g. `);`) rejected, so that garbage never reaches recruiter-facing data.
-34. As an Admin, I want free-text notes stored exactly as written, including quotes and multiple lines, so that recruiter context is preserved.
+34. As an Admin, I want free-text notes trimmed, otherwise stored exactly as written, including quotes and multiple lines, so that recruiter context is preserved.
 35. As an Admin, I want phone numbers stored trimmed and otherwise as given, so that no contact detail is lost to over-eager parsing.
 
 ### Security
@@ -109,7 +109,7 @@ A single-page Recruiter view shows the scoped table with search, a status filter
 
 - Monorepo with a backend and a frontend. Docker Compose runs three services: Postgres 16, the API (runs migrations on start, then serves), and the Vite dev server (proxies `/api` to the API).
 - The backend is async FastAPI with SQLAlchemy 2.0 **Core** (not the ORM) on asyncpg, Alembic for migrations, and `uv` for Python tooling.
-- The backend is split into layers, with dependencies pointing only downward:
+- The backend is split into layers, with dependencies pointing only downward. api depends on services; services on domain and repositories; repositories may depend on domain types, because they persist them. Nothing depends on api or services, and domain depends on nothing:
   - **api**: routers, dependencies, request/response models and status codes. Nothing else.
   - **services**: use-case orchestration. An import service (parse → validate → merge → batched persist → report) and a candidate service (the single seam for scoped reads). No SQL, no HTTP.
   - **domain**: pure Python with no I/O. The Candidate Pydantic v2 model, the Status and Region enums, normalization rules, and first-seen Merge and ID Collision detection.
@@ -126,7 +126,7 @@ A single-page Recruiter view shows the scoped table with search, a status filter
 
 ### Validation rules
 
-- **Required:** email, first name, last name, Region, status. **Nullable:** phone, desired role, salary, applied date, source, notes.
+- **Required:** `candidate_id` (Legacy ID), email, first name, last name, Region, status. **Nullable:** phone, desired role, salary, applied date, source, notes.
 - **Email:** trim, lowercase the whole address, validate with Pydantic `EmailStr` (offline, no deliverability check). Never repaired. No provider-specific aliasing.
 - **Region:** trim, uppercase, strip hyphens, spaces and underscores, then match exactly against the six canonical codes stripped the same way. No fuzzy or alias matching.
 - **Status:** a four-value enum (`active`, `screening`, `interviewing`, `withdrawn`), matched case-insensitively after trimming. No typo correction.
@@ -137,20 +137,20 @@ A single-page Recruiter view shows the scoped table with search, a status filter
 
 ### Import API contract
 
-- `POST /api/v1/candidates/import`, `multipart/form-data` with a single `file` field. No Recruiter header required (documented in NOTES.md as a deliberate simplification).
-- Decoded as UTF-8 with a BOM tolerated. Invalid UTF-8 → 400. Missing expected columns → 400 naming them (extra columns ignored). Over 5 MB → 413.
+- `POST /api/v1/candidates/import`, `multipart/form-data` with a single `file` field. **Admin-only**: `X-Recruiter-Id` missing → 401, unknown or non-Admin → 403. (Changed from "open" during implementation: because a Merge fills blanks on existing Candidates, an open import would let anyone write into anyone's record.)
+- Decoded as UTF-8 with a BOM tolerated. Invalid UTF-8 → 400. Missing expected columns → 400 naming them (extra columns ignored); an empty file is refused this way too. A file the CSV reader can't parse → 400. Over 5 MB → 413.
 - Response, the Import Report:
   - `imported`: count of new Candidates.
   - `merged`: count of rows Merged.
   - `rejected`: a list of `{row, candidate_id, reason}`.
   - `merges`: a list of `{row, candidate_id, merged_into}`.
-- `row` is the 1-based CSV record number, header excluded. A `reason` joins every validation error with `; `, using fixed prefixes: `missing <field>`, `invalid email`, `unknown region`, `unknown status`, `invalid date`, `invalid characters in <field>`, `candidate_id collision`.
+- `row` is the 1-based CSV record number, header excluded. A `reason` joins every validation error with `; `, using fixed prefixes: `missing <field>`, `invalid email`, `unknown region`, `unknown status`, `invalid date`, `invalid characters in <field>`, `<field> too long`, `candidate_id collision`.
 
 ### Read API contract
 
 - `GET /api/v1/candidates?search=&status=&page=&page_size=`:
-  - Search is a case-insensitive substring match on first name, last name, full name, email and desired role. LIKE wildcards are escaped. Accent-sensitive.
-  - `status` is optional; an invalid value → 422.
+  - Search is a case-insensitive substring match on first name, last name, full name, email and desired role. LIKE wildcards are escaped. Accent-sensitive. At most 200 characters; longer → 422.
+  - `status` is optional and matched case-insensitively (`Active` works); an invalid value → 422.
   - `page` defaults to 1. `page_size` defaults to 25, maximum 100.
   - Ordered by applied date descending (nulls last), then id.
   - Response `{items, total, page, page_size}`, where `total` is the scoped count.
@@ -210,7 +210,6 @@ A single-page Recruiter view shows the scoped table with search, a status filter
 ## Out of Scope
 
 - Login and real authentication. Identity is the `X-Recruiter-Id` header only.
-- Authorization on the import endpoint (left open, documented).
 - Phone validation or E.164 normalization.
 - Accent-insensitive search (`unaccent`).
 - Currency handling for salary.

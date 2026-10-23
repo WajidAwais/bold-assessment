@@ -4,11 +4,11 @@
 
 **Blocked by:** 05: Search, status filter and pagination
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Selecting Caleb shows only US-MW and US-NE rows.
-- [ ] Switching to Marisol shows only PH-MNL and CO-BOG rows, and none of Caleb's rows remain visible.
-- [ ] `Nguyễn Thị Hoa` renders correctly in the table.
-- [ ] Typing a search term and choosing a status both narrow the table.
-- [ ] The suite is marked `e2e` and documented as needing the compose stack running.
-- [ ] The UI is also checked by hand in a browser during implementation.
+- [x] Selecting Caleb shows only US-MW and US-NE rows.
+- [x] Switching to Marisol shows only PH-MNL and CO-BOG rows, and none of Caleb's rows remain visible.
+- [x] `Nguyễn Thị Hoa` renders correctly in the table.
+- [x] Typing a search term and choosing a status both narrow the table.
+- [x] The suite is marked `e2e` and documented as needing the compose stack running.
+- [x] The UI is also checked by hand in a browser during implementation.

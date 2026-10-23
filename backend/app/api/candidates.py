@@ -11,9 +11,12 @@ router = APIRouter(prefix="/api/v1/candidates", tags=["candidates"])
 
 @router.post("/import", response_model=ImportReportOut)
 async def import_candidates(file: UploadFile, owner_engine: OwnerEngine) -> ImportReportOut:
-    data = await file.read()
+    # Read one byte past the limit: enough to tell "too large" without reading it all.
+    data = await file.read(import_service.MAX_IMPORT_BYTES + 1)
     try:
         report = await import_service.import_candidates(owner_engine, data)
+    except import_service.ImportFileTooLarge as exc:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, str(exc)) from exc
     except import_service.InvalidImportFile as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     return ImportReportOut.model_validate(report)

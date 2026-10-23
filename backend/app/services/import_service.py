@@ -7,12 +7,29 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.db.connections import owner_connection
-from app.domain.import_plan import ImportRow, Merge, Rejection, lookup_keys, plan_import
+from app.domain.import_plan import (
+    CSV_COLUMNS,
+    ImportRow,
+    Merge,
+    Rejection,
+    lookup_keys,
+    plan_import,
+)
 from app.repositories import candidates as candidate_repo
+
+MAX_IMPORT_BYTES = 5 * 1024 * 1024
+
+# The csv module refuses fields over 128 KiB by default; a single field may
+# legitimately use the whole size budget (e.g. a long note).
+csv.field_size_limit(MAX_IMPORT_BYTES)
 
 
 class InvalidImportFile(ValueError):
     """The file as a whole can't be imported; no row has been processed."""
+
+
+class ImportFileTooLarge(InvalidImportFile):
+    """The file is over ``MAX_IMPORT_BYTES``; no row has been processed."""
 
 
 @dataclass(frozen=True)
@@ -24,13 +41,23 @@ class ImportReport:
 
 
 def parse_csv(data: bytes) -> list[ImportRow]:
+    """Decode and split the file into records, refusing a bad file as a whole."""
+    if len(data) > MAX_IMPORT_BYTES:
+        raise ImportFileTooLarge(f"file is larger than {MAX_IMPORT_BYTES} bytes")
     try:
         text = data.decode("utf-8-sig")  # tolerates an Excel byte-order mark
     except UnicodeDecodeError as exc:
         raise InvalidImportFile("file is not valid UTF-8") from exc
+
     reader = csv.DictReader(io.StringIO(text, newline=""))
-    # enumerate counts CSV records, so a multi-line note doesn't shift row numbers.
-    return [ImportRow(row=number, values=record) for number, record in enumerate(reader, start=1)]
+    missing = [column for column in CSV_COLUMNS if column not in (reader.fieldnames or [])]
+    if missing:
+        raise InvalidImportFile(f"missing columns: {', '.join(missing)}")
+    try:
+        # enumerate counts CSV records, so a multi-line note doesn't shift row numbers.
+        return [ImportRow(number, record) for number, record in enumerate(reader, start=1)]
+    except csv.Error as exc:
+        raise InvalidImportFile(f"file is not a readable CSV: {exc}") from exc
 
 
 async def import_candidates(owner_engine: AsyncEngine, data: bytes) -> ImportReport:

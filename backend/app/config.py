@@ -14,3 +14,8 @@ class Settings(BaseSettings):
 
     # Owner role: runs migrations and the import.
     database_url: str = "postgresql+asyncpg://techforce:techforce@localhost:5433/techforce"
+    # techforce_app: non-owner, no BYPASSRLS. Every Candidate read goes through it
+    # (ADR-0002). The migration creates the role with this URL's password.
+    app_database_url: str = (
+        "postgresql+asyncpg://techforce_app:techforce_app@localhost:5433/techforce"
+    )

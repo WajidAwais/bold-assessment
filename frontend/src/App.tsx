@@ -1,8 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ApiError, fetchCandidates, fetchRecruiters } from "./api";
+import { ApiError, fetchCandidates, fetchRecruiters, type Status } from "./api";
+import { CandidateFilters } from "./CandidateFilters";
 import { CandidateTable } from "./CandidateTable";
+import { Pager } from "./Pager";
 import { RecruiterSwitcher } from "./RecruiterSwitcher";
+import { useDebouncedValue } from "./useDebouncedValue";
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 // Client errors (401/403/422) won't fix themselves; only retry the rest.
 function retryUnlessClientError(failureCount: number, error: Error): boolean {
@@ -15,15 +20,29 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const recruiterId = selectedId ?? recruiters.data?.[0]?.id ?? null;
 
-  // Ticket 05 adds search, status and paging.
-  const page = 1;
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebouncedValue(searchInput.trim(), SEARCH_DEBOUNCE_MS);
+  const [status, setStatus] = useState<Status | null>(null);
+
+  // The page belongs to one Recruiter, search and status. When any of them
+  // changes, the stored page no longer applies and we're back on page 1, in
+  // the same render, so no request for a stale page is ever made.
+  const filtersKey = JSON.stringify([recruiterId, search, status]);
+  const [pageState, setPageState] = useState({ filtersKey, page: 1 });
+  const page = pageState.filtersKey === filtersKey ? pageState.page : 1;
+  const setPage = (next: number) => setPageState({ filtersKey, page: next });
+
   const candidates = useQuery({
-    // The Recruiter ID is part of the key, so one Recruiter's cached rows are
-    // never shown to another.
-    queryKey: ["candidates", recruiterId, { page }],
-    queryFn: () => fetchCandidates(recruiterId!, page),
+    // Every input is in the key, the Recruiter ID first, so one Recruiter's
+    // cached rows are never shown to another.
+    queryKey: ["candidates", recruiterId, { search, status, page }],
+    queryFn: () => fetchCandidates(recruiterId!, { search, status, page }),
     enabled: recruiterId !== null,
     retry: retryUnlessClientError,
+    // Keep the previous page on screen while the next loads, but only for the
+    // same Recruiter: switching Recruiter shows a loading state, never their rows.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === recruiterId ? previous : undefined,
   });
 
   return (
@@ -34,25 +53,40 @@ export function App() {
         <p role="alert">Couldn't load recruiters: {recruiters.error.message}</p>
       )}
       {recruiters.isSuccess && recruiterId !== null && (
-        <RecruiterSwitcher
-          recruiters={recruiters.data}
-          value={recruiterId}
-          onChange={setSelectedId}
-        />
+        <div className="toolbar">
+          <RecruiterSwitcher
+            recruiters={recruiters.data}
+            value={recruiterId}
+            onChange={setSelectedId}
+          />
+          <CandidateFilters
+            search={searchInput}
+            onSearchChange={setSearchInput}
+            status={status}
+            onStatusChange={setStatus}
+          />
+        </div>
       )}
       {recruiterId !== null && candidates.isPending && <p role="status">Loading…</p>}
+      {candidates.isPlaceholderData && <p role="status">Updating…</p>}
       {candidates.isError && (
         <p role="alert">Couldn't load candidates: {candidates.error.message}</p>
       )}
-      {candidates.isSuccess &&
-        (candidates.data.items.length === 0 ? (
-          <p>No candidates.</p>
-        ) : (
-          <>
+      {candidates.isSuccess && (
+        <div aria-busy={candidates.isPlaceholderData} className="results">
+          {candidates.data.items.length === 0 ? (
+            <p>No candidates match.</p>
+          ) : (
             <CandidateTable items={candidates.data.items} />
-            <p>{candidates.data.total} candidates</p>
-          </>
-        ))}
+          )}
+          <Pager
+            page={page}
+            pageSize={candidates.data.page_size}
+            total={candidates.data.total}
+            onPageChange={setPage}
+          />
+        </div>
+      )}
     </main>
   );
 }

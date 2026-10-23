@@ -19,6 +19,14 @@ export type CandidateList = {
   page_size: number;
 };
 
+export type Recruiter = {
+  id: string;
+  full_name: string;
+  role: "admin" | "recruiter";
+  // Canonical Region codes, or ["*"] for an Admin.
+  regions: string[];
+};
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -31,12 +39,25 @@ export class ApiError extends Error {
 async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
   if (!response.ok) {
-    throw new ApiError(response.status, `${response.status} ${response.statusText}`);
+    let detail = response.statusText;
+    try {
+      const body = (await response.json()) as { detail?: unknown };
+      if (typeof body.detail === "string") detail = body.detail;
+    } catch {
+      // Not JSON; keep the status text.
+    }
+    throw new ApiError(response.status, `${response.status} ${detail}`);
   }
   return (await response.json()) as T;
 }
 
-export function fetchCandidates(page: number): Promise<CandidateList> {
+export function fetchRecruiters(): Promise<Recruiter[]> {
+  return getJson<Recruiter[]>("/api/v1/recruiters");
+}
+
+export function fetchCandidates(recruiterId: string, page: number): Promise<CandidateList> {
   const params = new URLSearchParams({ page: String(page) });
-  return getJson<CandidateList>(`/api/v1/candidates?${params}`);
+  return getJson<CandidateList>(`/api/v1/candidates?${params}`, {
+    headers: { "X-Recruiter-Id": recruiterId },
+  });
 }

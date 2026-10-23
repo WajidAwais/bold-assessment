@@ -1,7 +1,7 @@
 import type { Recruiter } from "./api";
 
 function regionLabel(recruiter: Recruiter): string {
-  return recruiter.regions.includes("*") ? "All Regions" : recruiter.regions.join(", ");
+  return recruiter.role === "admin" ? "All Regions" : recruiter.regions.join(", ");
 }
 
 export function RecruiterSwitcher({

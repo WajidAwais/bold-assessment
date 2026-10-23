@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.domain.recruiter import is_admin
 from app.services import recruiter_service
 
 
@@ -44,7 +45,7 @@ async def require_admin(
     if not x_recruiter_id:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "X-Recruiter-Id header is required")
     recruiter = await recruiter_service.find_recruiter(app_engine, x_recruiter_id)
-    if recruiter is None or recruiter["role"] != "admin":
+    if recruiter is None or not is_admin(recruiter["role"]):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only an Admin may import")
     return recruiter["id"]
 

@@ -27,7 +27,7 @@ export type Recruiter = {
   id: string;
   full_name: string;
   role: "admin" | "recruiter";
-  // Canonical Region codes, or ["*"] for an Admin.
+  // Canonical Region codes; the roster shows ["*"] for an Admin, but role decides Admin-ness.
   regions: string[];
 };
 

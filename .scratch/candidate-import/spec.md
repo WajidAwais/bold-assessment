@@ -137,7 +137,7 @@ A single-page Recruiter view shows the scoped table with search, a status filter
 
 ### Import API contract
 
-- `POST /api/v1/candidates/import`, `multipart/form-data` with a single `file` field. No Recruiter header required (documented in NOTES.md as a deliberate simplification).
+- `POST /api/v1/candidates/import`, `multipart/form-data` with a single `file` field. **Admin-only**: `X-Recruiter-Id` missing → 401, unknown or non-Admin → 403. (Changed from "open" during implementation: because a Merge fills blanks on existing Candidates, an open import would let anyone write into anyone's record.)
 - Decoded as UTF-8 with a BOM tolerated. Invalid UTF-8 → 400. Missing expected columns → 400 naming them (extra columns ignored). Over 5 MB → 413.
 - Response, the Import Report:
   - `imported`: count of new Candidates.
@@ -210,7 +210,6 @@ A single-page Recruiter view shows the scoped table with search, a status filter
 ## Out of Scope
 
 - Login and real authentication. Identity is the `X-Recruiter-Id` header only.
-- Authorization on the import endpoint (left open, documented).
 - Phone validation or E.164 normalization.
 - Accent-insensitive search (`unaccent`).
 - Currency handling for salary.

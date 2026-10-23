@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 from pydantic import BeforeValidator
 
-from app.api.dependencies import AppEngine, CurrentRecruiterId, OwnerEngine
+from app.api.dependencies import AdminId, AppEngine, CurrentRecruiterId, OwnerEngine
 from app.api.schemas import CandidateListItem, CandidateListOut, ImportReportOut
 from app.domain.candidate import Status
 from app.services import candidate_service, import_service
@@ -12,7 +12,11 @@ router = APIRouter(prefix="/api/v1/candidates", tags=["candidates"])
 
 
 @router.post("/import", response_model=ImportReportOut)
-async def import_candidates(file: UploadFile, owner_engine: OwnerEngine) -> ImportReportOut:
+async def import_candidates(
+    file: UploadFile, owner_engine: OwnerEngine, _admin_id: AdminId
+) -> ImportReportOut:
+    # Admin-only: a Merge fills blanks on existing Candidates, so an open import
+    # would let anyone write into anyone's record.
     # Read one byte past the limit: enough to tell "too large" without reading it all.
     data = await file.read(import_service.MAX_IMPORT_BYTES + 1)
     try:

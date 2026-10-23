@@ -35,6 +35,7 @@ async def candidates(client: httpx.AsyncClient) -> None:
     response = await client.post(
         "/api/v1/candidates/import",
         files={"file": ("candidates_import.csv", csv_bytes, "text/csv")},
+        headers={"X-Recruiter-Id": "R-101"},
     )
     assert response.json()["imported"] == len(ROWS)
 
@@ -148,6 +149,7 @@ async def _import(client: httpx.AsyncClient, rows: list[str]) -> None:
     response = await client.post(
         "/api/v1/candidates/import",
         files={"file": ("candidates_import.csv", csv_bytes, "text/csv")},
+        headers={"X-Recruiter-Id": "R-101"},
     )
     assert response.json()["imported"] == len(rows)
 

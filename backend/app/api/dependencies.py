@@ -34,3 +34,19 @@ async def get_current_recruiter_id(
 
 
 CurrentRecruiterId = Annotated[str, Depends(get_current_recruiter_id)]
+
+
+async def require_admin(
+    app_engine: AppEngine,
+    x_recruiter_id: Annotated[str | None, Header()] = None,
+) -> str:
+    """Like ``get_current_recruiter_id``, but a non-Admin Recruiter is also 403."""
+    if not x_recruiter_id:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "X-Recruiter-Id header is required")
+    recruiter = await recruiter_service.find_recruiter(app_engine, x_recruiter_id)
+    if recruiter is None or recruiter["role"] != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only an Admin may import")
+    return recruiter["id"]
+
+
+AdminId = Annotated[str, Depends(require_admin)]

@@ -15,10 +15,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
         await app.state.owner_engine.dispose()
+        await app.state.app_engine.dispose()
 
     app = FastAPI(title="TechForce Recruiting Operations", lifespan=lifespan)
     # Engines connect lazily, so building the app never touches the database.
+    # Owner: the import only. techforce_app: every read, scoped by forced RLS.
     app.state.owner_engine = create_engine(settings.database_url)
+    app.state.app_engine = create_engine(settings.app_database_url)
     app.include_router(candidates.router)
     app.include_router(recruiters.router)
     return app

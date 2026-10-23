@@ -2,6 +2,9 @@
 
 import httpx
 
+# Dana is the Admin, so her Scope is every Candidate.
+AS_ADMIN = {"X-Recruiter-Id": "R-101"}
+
 HEADER = (
     "candidate_id,first_name,last_name,email,phone,region_code,desired_role,"
     "salary_expectation,applied_date,status,source,notes"
@@ -33,7 +36,7 @@ async def test_imported_rows_are_listed_as_candidates(client):
     assert response.status_code == 200
     assert response.json() == {"imported": 2, "merged": 0, "rejected": [], "merges": []}
 
-    listing = await client.get("/api/v1/candidates")
+    listing = await client.get("/api/v1/candidates", headers=AS_ADMIN)
     assert listing.status_code == 200
     body = listing.json()
     assert body["total"] == 2
@@ -77,7 +80,9 @@ async def test_every_row_of_the_real_export_is_accounted_for(client, candidates_
     # 53 CSV records (one of them spans three physical lines)
     assert report["imported"] + report["merged"] + len(report["rejected"]) == 53
 
-    listing = (await client.get("/api/v1/candidates", params={"page_size": 100})).json()
+    listing = (
+        await client.get("/api/v1/candidates", params={"page_size": 100}, headers=AS_ADMIN)
+    ).json()
     assert listing["total"] == report["imported"]
     names = {(i["first_name"], i["last_name"]) for i in listing["items"]}
     assert ("Nguyễn", "Thị Hoa") in names

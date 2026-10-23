@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 
-from app.api.dependencies import OwnerEngine
+from app.api.dependencies import AppEngine, CurrentRecruiterId, OwnerEngine
 from app.api.schemas import CandidateListItem, CandidateListOut, ImportReportOut
 from app.services import candidate_service, import_service
 
@@ -21,12 +21,14 @@ async def import_candidates(file: UploadFile, owner_engine: OwnerEngine) -> Impo
 
 @router.get("", response_model=CandidateListOut)
 async def list_candidates(
-    # Ticket 02 swaps this for the scoped, techforce_app engine.
-    engine: OwnerEngine,
+    app_engine: AppEngine,
+    recruiter_id: CurrentRecruiterId,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 25,
 ) -> CandidateListOut:
-    result = await candidate_service.list_candidates(engine, page=page, page_size=page_size)
+    result = await candidate_service.list_candidates(
+        app_engine, recruiter_id=recruiter_id, page=page, page_size=page_size
+    )
     return CandidateListOut(
         items=[CandidateListItem.model_validate(dict(item)) for item in result.items],
         total=result.total,

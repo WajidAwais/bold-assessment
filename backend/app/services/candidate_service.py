@@ -1,6 +1,7 @@
 """Candidate reads. The single seam every Candidate read goes through.
 
-Temporarily unscoped: ticket 02 adds the Recruiter and the scoped connection.
+Reads run as ``techforce_app`` inside a transaction scoped to one Recruiter, so
+forced RLS returns only that Recruiter's Scope (ADR-0002).
 """
 
 from dataclasses import dataclass
@@ -8,7 +9,7 @@ from dataclasses import dataclass
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.db.connections import unscoped_read_connection
+from app.db.connections import scoped_connection
 from app.repositories import candidates as candidate_repo
 
 
@@ -20,8 +21,10 @@ class CandidatePage:
     page_size: int
 
 
-async def list_candidates(engine: AsyncEngine, *, page: int, page_size: int) -> CandidatePage:
-    async with unscoped_read_connection(engine) as conn:
+async def list_candidates(
+    app_engine: AsyncEngine, *, recruiter_id: str, page: int, page_size: int
+) -> CandidatePage:
+    async with scoped_connection(app_engine, recruiter_id) as conn:
         items, total = await candidate_repo.list_page(
             conn, limit=page_size, offset=(page - 1) * page_size
         )

@@ -6,9 +6,12 @@ Recruiter context. The HTTP seam proves the API resolves the Recruiter from
 ``X-Recruiter-Id`` and returns only their Scope.
 """
 
+from collections.abc import AsyncIterator
+
 import asyncpg
 import httpx
 import pytest
+from sqlalchemy.engine import URL
 
 HEADER = (
     "candidate_id,first_name,last_name,email,phone,region_code,desired_role,"
@@ -43,10 +46,15 @@ async def one_candidate_per_region(client: httpx.AsyncClient) -> None:
 
 
 @pytest.fixture
-async def as_app_role(app_role_url) -> asyncpg.Connection:
-    conn = await asyncpg.connect(app_role_url.render_as_string(hide_password=False).replace(
-        "postgresql+asyncpg", "postgresql"
-    ))
+async def as_app_role(app_role_url: URL) -> AsyncIterator[asyncpg.Connection]:
+    """A raw connection as ``techforce_app``, bypassing the API entirely."""
+    conn = await asyncpg.connect(
+        host=app_role_url.host,
+        port=app_role_url.port,
+        user=app_role_url.username,
+        password=app_role_url.password,
+        database=app_role_url.database,
+    )
     yield conn
     await conn.close()
 
@@ -86,3 +94,45 @@ async def test_recruiter_context_does_not_outlive_its_transaction(
 async def test_app_role_cannot_write_candidates(as_app_role):
     with pytest.raises(asyncpg.InsufficientPrivilegeError):
         await as_app_role.execute("DELETE FROM candidates")
+
+
+# --- HTTP seam: the API serves the caller's Scope -----------------------------
+
+
+async def _list_as(client: httpx.AsyncClient, recruiter_id: str) -> httpx.Response:
+    return await client.get("/api/v1/candidates", headers={"X-Recruiter-Id": recruiter_id})
+
+
+async def test_caleb_cannot_retrieve_a_ph_mnl_candidate(one_candidate_per_region, client):
+    response = await _list_as(client, CALEB)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert sorted(item["legacy_id"] for item in body["items"]) == ["C-1001", "C-1015"]
+    assert body["total"] == 2
+
+
+async def test_marisol_sees_only_ph_mnl_and_co_bog(one_candidate_per_region, client):
+    body = (await _list_as(client, MARISOL)).json()
+
+    assert sorted(item["legacy_id"] for item in body["items"]) == ["C-1006", "C-1008"]
+    assert body["total"] == 2
+
+
+async def test_dana_the_admin_can_retrieve_a_ph_mnl_candidate(one_candidate_per_region, client):
+    body = (await _list_as(client, DANA)).json()
+
+    assert "C-1008" in {item["legacy_id"] for item in body["items"]}
+    assert body["total"] == len(ROWS)
+
+
+async def test_an_unknown_recruiter_is_forbidden(one_candidate_per_region, client):
+    response = await _list_as(client, "R-999")
+
+    assert response.status_code == 403
+
+
+async def test_a_missing_recruiter_header_is_unauthorized(one_candidate_per_region, client):
+    response = await client.get("/api/v1/candidates")
+
+    assert response.status_code == 401

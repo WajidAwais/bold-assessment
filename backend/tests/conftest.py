@@ -75,12 +75,16 @@ def app_role_url(test_database_url: URL) -> URL:
 
 
 @pytest.fixture(scope="session")
-async def app(test_database_url: URL):
+async def app(test_database_url: URL, app_role_url: URL):
     app = create_app(
-        Settings(database_url=test_database_url.render_as_string(hide_password=False))
+        Settings(
+            database_url=test_database_url.render_as_string(hide_password=False),
+            app_database_url=app_role_url.render_as_string(hide_password=False),
+        )
     )
     yield app
     await app.state.owner_engine.dispose()
+    await app.state.app_engine.dispose()
 
 
 @pytest.fixture(autouse=True)

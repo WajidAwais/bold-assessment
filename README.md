@@ -11,6 +11,21 @@ their Regions. Scope is enforced by PostgreSQL Row-Level Security.
 The rules and judgement calls are in [NOTES.md](NOTES.md), the vocabulary is in
 [GLOSSARY.md](GLOSSARY.md), and the decisions are in [docs/adr/](docs/adr/).
 
+## Make shortcuts
+
+If you have `make`, these wrap the commands below. Run `make` to list them all.
+
+```sh
+make up        # build and start db, api and web; returns once all three are healthy
+make import    # import candidates_import.csv as the Admin and print the Import Report
+make test      # default suite (needs only Postgres)
+make e2e       # Playwright e2e suite against the running stack
+make down      # stop the stack (make reset also deletes the database volume)
+```
+
+For local development, `make install`, `make api` and `make web` run the API and UI
+on the host against the compose Postgres.
+
 ## Quick start (clean machine, Docker only)
 
 ```sh

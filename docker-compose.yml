@@ -30,15 +30,27 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:8000:8000"
+    healthcheck:
+      # Healthy once migrations have run and the API answers from the database.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/recruiters', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
   web:
     build: ./frontend
     environment:
       API_PROXY_TARGET: http://api:8000
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "127.0.0.1:5173:5173"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5173/"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
 volumes:
   pgdata:

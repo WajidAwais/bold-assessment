@@ -1,4 +1,4 @@
-"""Import use case: parse -> plan (validate, dedupe) -> batched persist -> report."""
+"""Import use case: parse -> plan (validate, merge) -> batched persist -> report."""
 
 import csv
 import io
@@ -69,6 +69,7 @@ async def import_candidates(owner_engine: AsyncEngine, data: bytes) -> ImportRep
         existing = await candidate_repo.find_existing(conn, emails, legacy_ids)
         plan = plan_import(rows, existing)
         await candidate_repo.insert_many(conn, plan.new_candidates)
+        await candidate_repo.fill_blanks(conn, plan.blank_fills)
 
     return ImportReport(
         imported=len(plan.new_candidates),

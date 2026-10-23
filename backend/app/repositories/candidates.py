@@ -3,13 +3,16 @@
 from collections.abc import Collection, Sequence
 from typing import Any
 
-from sqlalchemy import func, insert, or_, select
+from sqlalchemy import bindparam, func, insert, or_, select, update
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.db.tables import candidates
 from app.domain.candidate import Candidate
-from app.domain.import_plan import ExistingCandidates
+from app.domain.import_plan import FILLABLE_FIELDS, BlankFill, ExistingCandidates
+
+# Every Candidate field (the surrogate id is not part of the domain model).
+CANDIDATE_COLUMNS = tuple(candidates.c[name] for name in Candidate.model_fields)
 
 LIST_COLUMNS = (
     candidates.c.id,
@@ -27,21 +30,20 @@ LIST_COLUMNS = (
 async def find_existing(
     conn: AsyncConnection, emails: Collection[str], legacy_ids: Collection[str]
 ) -> ExistingCandidates:
-    """Look up, in one query, which of these emails and Legacy IDs are taken."""
+    """Fetch, in one query, every stored Candidate holding one of these emails
+    or Legacy IDs."""
     if not emails and not legacy_ids:
         return ExistingCandidates()
     result = await conn.execute(
-        select(candidates.c.email, candidates.c.legacy_id).where(
+        select(*CANDIDATE_COLUMNS).where(
             or_(
                 candidates.c.email.in_(list(emails)),
                 candidates.c.legacy_id.in_(list(legacy_ids)),
             )
         )
     )
-    rows = result.all()
     return ExistingCandidates(
-        emails=frozenset(row.email for row in rows),
-        legacy_ids=frozenset(row.legacy_id for row in rows),
+        [Candidate.model_validate(dict(row)) for row in result.mappings()]
     )
 
 
@@ -50,6 +52,35 @@ async def insert_many(conn: AsyncConnection, new_candidates: Sequence[Candidate]
     if not new_candidates:
         return
     await conn.execute(insert(candidates), [_to_row(c) for c in new_candidates])
+
+
+async def fill_blanks(conn: AsyncConnection, fills: Sequence[BlankFill]) -> None:
+    """Fill null fields of stored Candidates as one batched statement.
+
+    ``COALESCE`` keeps any value already stored, so a fill can never overwrite.
+    """
+    if not fills:
+        return
+    statement = (
+        update(candidates)
+        .where(candidates.c.email == bindparam("match_email"))
+        .values(
+            {
+                name: func.coalesce(
+                    candidates.c[name], bindparam(f"fill_{name}", type_=candidates.c[name].type)
+                )
+                for name in FILLABLE_FIELDS
+            }
+        )
+    )
+    await conn.execute(
+        statement,
+        [
+            {"match_email": fill.email}
+            | {f"fill_{name}": fill.values.get(name) for name in FILLABLE_FIELDS}
+            for fill in fills
+        ],
+    )
 
 
 async def list_page(

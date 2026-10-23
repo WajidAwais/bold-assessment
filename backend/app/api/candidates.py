@@ -1,9 +1,11 @@
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, status
+from pydantic import BeforeValidator
 
 from app.api.dependencies import AppEngine, CurrentRecruiterId, OwnerEngine
 from app.api.schemas import CandidateListItem, CandidateListOut, ImportReportOut
+from app.domain.candidate import Status
 from app.services import candidate_service, import_service
 
 router = APIRouter(prefix="/api/v1/candidates", tags=["candidates"])
@@ -22,16 +24,30 @@ async def import_candidates(file: UploadFile, owner_engine: OwnerEngine) -> Impo
     return ImportReportOut.model_validate(report)
 
 
+def _fold_case(value: object) -> object:
+    return value.lower() if isinstance(value, str) else value
+
+
+# One of the four statuses, matched case-insensitively; anything else is a 422.
+StatusFilter = Annotated[Status | None, BeforeValidator(_fold_case), Query()]
+
+
 @router.get("", response_model=CandidateListOut)
 async def list_candidates(
     app_engine: AppEngine,
     recruiter_id: CurrentRecruiterId,
     search: Annotated[str | None, Query(max_length=200)] = None,
+    status: StatusFilter = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 25,
 ) -> CandidateListOut:
     result = await candidate_service.list_candidates(
-        app_engine, recruiter_id=recruiter_id, search=search, page=page, page_size=page_size
+        app_engine,
+        recruiter_id=recruiter_id,
+        search=search,
+        status=status,
+        page=page,
+        page_size=page_size,
     )
     return CandidateListOut(
         items=[CandidateListItem.model_validate(dict(item)) for item in result.items],

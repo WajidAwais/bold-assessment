@@ -10,7 +10,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.db.tables import candidates
-from app.domain.candidate import Candidate
+from app.domain.candidate import Candidate, Status
 from app.domain.import_plan import ExistingCandidates
 
 LIST_COLUMNS = (
@@ -55,7 +55,11 @@ async def insert_many(conn: AsyncConnection, new_candidates: Sequence[Candidate]
 
 
 async def list_page(
-    conn: AsyncConnection, *, search: str | None, limit: int, offset: int
+    conn: AsyncConnection,
+    *,
+    search: str | None,
+    status: Status | None,
+    limit: int, offset: int
 ) -> tuple[list[RowMapping], int]:
     """One page of the Candidates visible on ``conn``, and how many match in all.
 
@@ -63,7 +67,7 @@ async def list_page(
     caller's Scope, so these can only narrow it further, and ``total`` counts
     the same filtered set.
     """
-    conditions = _list_conditions(search=search)
+    conditions = _list_conditions(search=search, status=status)
     total = await conn.scalar(select(func.count()).select_from(candidates).where(*conditions))
     result = await conn.execute(
         select(*LIST_COLUMNS)
@@ -83,8 +87,12 @@ def _escape_like(term: str) -> str:
     return re.sub(r"([%_\\])", r"\\\1", term)
 
 
-def _list_conditions(*, search: str | None) -> list[ColumnElement[bool]]:
+def _list_conditions(
+    *, search: str | None, status: Status | None
+) -> list[ColumnElement[bool]]:
     conditions: list[ColumnElement[bool]] = []
+    if status is not None:
+        conditions.append(candidates.c.status == status.value)
     if search:
         # Case-insensitive, accent-sensitive substring; the term is a bound
         # parameter, so SQL-looking text is only ever compared, never run.

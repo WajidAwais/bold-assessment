@@ -80,8 +80,9 @@ async def test_search_matches_names_email_and_role_case_insensitively(
 
 
 async def test_search_is_accent_sensitive(candidates, client):
-    assert _ids(await _list(client, DANA, search="Tomás")) == ["C-1006"]
-    assert _ids(await _list(client, DANA, search="Tomas")) == []
+    # Not "Tomas": tomas.herrera@gmail.com would rightly match by email.
+    assert _ids(await _list(client, DANA, search="Müller")) == ["C-1015"]
+    assert _ids(await _list(client, DANA, search="Muller")) == []
 
 
 @pytest.mark.parametrize("wildcard", ["%", "_", "\\", "%%", "a%e"])
@@ -103,3 +104,28 @@ async def test_the_c1036_drop_payload_in_search_returns_normally_and_harms_nothi
     assert response.status_code == 200
     assert response.json() == {"items": [], "total": 0, "page": 1, "page_size": 25}
     assert (await _list(client, DANA)).json()["total"] == len(ROWS)
+
+
+# --- Status filter --------------------------------------------------------------
+
+
+@pytest.mark.parametrize("status", ["interviewing", "INTERVIEWING", "Interviewing"])
+async def test_status_filter_matches_case_insensitively(candidates, client, status):
+    response = await _list(client, DANA, status=status)
+
+    assert _ids(response) == ["C-1008"]
+    assert response.json()["total"] == 1
+
+
+async def test_status_filter_and_search_combine_within_scope(candidates, client):
+    response = await _list(client, MARISOL, status="active", search="engineer")
+
+    assert _ids(response) == ["C-1006"]
+    assert response.json()["total"] == 1
+
+
+@pytest.mark.parametrize("status", ["actve", "on hold", "", "active'--"])
+async def test_an_invalid_status_is_a_validation_error(candidates, client, status):
+    response = await _list(client, DANA, status=status)
+
+    assert response.status_code == 422

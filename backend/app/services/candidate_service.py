@@ -10,6 +10,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.db.connections import scoped_connection
+from app.domain.candidate import Status
 from app.repositories import candidates as candidate_repo
 
 
@@ -26,11 +27,12 @@ async def list_candidates(
     *,
     recruiter_id: str,
     search: str | None = None,
+    status: Status | None = None,
     page: int,
     page_size: int,
 ) -> CandidatePage:
     async with scoped_connection(app_engine, recruiter_id) as conn:
         items, total = await candidate_repo.list_page(
-            conn, search=search, limit=page_size, offset=(page - 1) * page_size
+            conn, search=search, status=status, limit=page_size, offset=(page - 1) * page_size
         )
     return CandidatePage(items=items, total=total, page=page, page_size=page_size)

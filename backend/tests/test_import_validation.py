@@ -5,6 +5,8 @@ from sqlalchemy import func, select
 
 from app.db.tables import candidates
 
+AS_ADMIN = {"X-Recruiter-Id": "R-101"}
+
 HEADER = (
     "candidate_id,first_name,last_name,email,phone,region_code,desired_role,"
     "salary_expectation,applied_date,status,source,notes"
@@ -71,7 +73,7 @@ async def test_the_real_export_rejects_each_invalid_row_with_every_reason(
 async def test_normalized_rows_from_the_real_export_are_imported(client, candidates_csv):
     await _import(client, candidates_csv)
 
-    listing = (await client.get("/api/v1/candidates", params={"page_size": 100})).json()
+    listing = (await client.get("/api/v1/candidates", params={"page_size": 100}, headers=AS_ADMIN)).json()
     by_id = {item["legacy_id"]: item for item in listing["items"]}
     assert by_id["C-1042"]["region"] == "US-MW"  # us-mw
     assert by_id["C-1043"]["region"] == "CO-BOG"  # " CO-BOG "
@@ -97,7 +99,7 @@ async def test_the_candidates_table_survives_the_real_export(client, app, candid
     report = (await _import(client, candidates_csv)).json()
 
     assert await _candidate_count(app) == report["imported"]
-    listing = await client.get("/api/v1/candidates")
+    listing = await client.get("/api/v1/candidates", headers=AS_ADMIN)
     assert listing.status_code == 200
 
 

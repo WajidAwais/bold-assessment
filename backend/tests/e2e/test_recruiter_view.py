@@ -15,6 +15,12 @@ def _option_label(page: Page, recruiter_name: str) -> str:
     return option.inner_text()
 
 
+def expect_total(page: Page, total: int) -> None:
+    """Wait for the scoped total; the leading "· " keeps 19 from passing for 9."""
+    pager = page.get_by_role("navigation", name="Pagination")
+    expect(pager).to_contain_text(f"· {total} candidates")
+
+
 def region_cells(page: Page) -> list[str]:
     return page.get_by_role("row").locator("td:nth-child(3)").all_inner_texts()
 
@@ -22,5 +28,18 @@ def region_cells(page: Page) -> list[str]:
 def test_caleb_sees_only_us_mw_and_us_ne(recruiter_view: Page) -> None:
     view_as(recruiter_view, "Caleb Nguyen")
 
-    expect(recruiter_view.get_by_text("19 candidates")).to_be_visible()
+    expect_total(recruiter_view, 19)
     assert set(region_cells(recruiter_view)) == {"US-MW", "US-NE"}
+
+
+def test_switching_to_marisol_leaves_none_of_calebs_rows(recruiter_view: Page) -> None:
+    view_as(recruiter_view, "Caleb Nguyen")
+    expect_total(recruiter_view, 19)
+    expect(recruiter_view.get_by_role("cell", name="Alicia Trent")).to_have_count(1)
+
+    view_as(recruiter_view, "Marisol Vega")
+
+    expect_total(recruiter_view, 9)
+    assert set(region_cells(recruiter_view)) == {"PH-MNL", "CO-BOG"}
+    expect(recruiter_view.get_by_role("cell", name="Alicia Trent")).to_have_count(0)
+    expect(recruiter_view.get_by_role("cell", name="Priya Raman")).to_have_count(0)

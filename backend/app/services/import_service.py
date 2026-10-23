@@ -13,6 +13,7 @@ from app.domain.import_plan import (
     Merge,
     Rejection,
     lookup_keys,
+    parse_rows,
     plan_import,
 )
 from app.repositories import candidates as candidate_repo
@@ -61,13 +62,13 @@ def parse_csv(data: bytes) -> list[ImportRow]:
 
 
 async def import_candidates(owner_engine: AsyncEngine, data: bytes) -> ImportReport:
-    rows = parse_csv(data)
-    emails, legacy_ids = lookup_keys(rows)
+    parsed = parse_rows(parse_csv(data))
+    emails, legacy_ids = lookup_keys(parsed)
 
     # One transaction for the whole import: it succeeds or fails as a whole.
     async with owner_connection(owner_engine) as conn:
         existing = await candidate_repo.find_existing(conn, emails, legacy_ids)
-        plan = plan_import(rows, existing)
+        plan = plan_import(parsed, existing)
         await candidate_repo.insert_many(conn, plan.new_candidates)
         await candidate_repo.fill_blanks(conn, plan.blank_fills)
 

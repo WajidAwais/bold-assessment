@@ -11,7 +11,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.db.tables import candidates
 from app.domain.candidate import Candidate, Status
-from app.domain.import_plan import FILLABLE_FIELDS, BlankFill, ExistingCandidates
+from app.domain.import_plan import FILLABLE_FIELDS, BlankFill
 
 # Every Candidate field (the surrogate id is not part of the domain model).
 CANDIDATE_COLUMNS = tuple(candidates.c[name] for name in Candidate.model_fields)
@@ -31,11 +31,11 @@ LIST_COLUMNS = (
 
 async def find_existing(
     conn: AsyncConnection, emails: Collection[str], legacy_ids: Collection[str]
-) -> ExistingCandidates:
+) -> list[Candidate]:
     """Fetch, in one query, every stored Candidate holding one of these emails
     or Legacy IDs."""
     if not emails and not legacy_ids:
-        return ExistingCandidates()
+        return []
     result = await conn.execute(
         select(*CANDIDATE_COLUMNS).where(
             or_(
@@ -44,9 +44,7 @@ async def find_existing(
             )
         )
     )
-    return ExistingCandidates(
-        [Candidate.model_validate(dict(row)) for row in result.mappings()]
-    )
+    return [Candidate.model_validate(dict(row)) for row in result.mappings()]
 
 
 async def insert_many(conn: AsyncConnection, new_candidates: Sequence[Candidate]) -> None:

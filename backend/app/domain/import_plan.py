@@ -1,8 +1,8 @@
 """Deciding what an import does with each row. Pure Python, no I/O.
 
-``plan_import`` turns raw CSV records into the Candidates to insert plus the
-Import Report entries. Every row ends up in exactly one bucket: new Candidate,
-Merge or Rejection. Nothing is dropped silently.
+``parse_rows`` validates each raw CSV record once; ``plan_import`` turns the
+parsed records into the Candidates to insert plus the Import Report entries.
+Every row ends up in exactly one bucket: new Candidate, Merge or Rejection. Nothing is dropped silently.
 
 A row that fails the Candidate model is rejected with every reason, each using
 a fixed prefix. A valid row is then placed by identity (ADR-0001):
@@ -69,6 +69,14 @@ class Rejection:
 
 
 @dataclass(frozen=True)
+class ParsedRow:
+    """A record and what parsing made of it: a Candidate, or its Rejection."""
+
+    row: ImportRow
+    result: Candidate | Rejection
+
+
+@dataclass(frozen=True)
 class Merge:
     row: int
     candidate_id: str | None
@@ -81,14 +89,6 @@ class BlankFill:
 
     email: str
     values: Mapping[str, Any]
-
-
-@dataclass(frozen=True)
-class ExistingCandidates:
-    """The stored Candidates sharing an email or Legacy ID with the file,
-    looked up in bulk before planning."""
-
-    candidates: Sequence[Candidate] = ()
 
 
 @dataclass
@@ -131,26 +131,35 @@ def _reason(error: Mapping[str, Any]) -> str:
         return f"missing {column}"
     if error["type"] == "invalid_characters":
         return f"invalid characters in {column}"
+    if error["type"] == "string_too_long":
+        return f"{column} too long"
     return _INVALID_REASONS.get(field, f"invalid {column}")
 
 
-def lookup_keys(rows: Iterable[ImportRow]) -> tuple[set[str], set[str]]:
+def parse_rows(rows: Iterable[ImportRow]) -> list[ParsedRow]:
+    """Parse every record once; the lookup and the plan both use the result."""
+    return [ParsedRow(row, parse_candidate(row)) for row in rows]
+
+
+def lookup_keys(parsed: Iterable[ParsedRow]) -> tuple[set[str], set[str]]:
     """The normalized emails and Legacy IDs to look up in the database."""
-    parsed = [c for c in map(parse_candidate, rows) if isinstance(c, Candidate)]
-    return {c.email for c in parsed}, {c.legacy_id for c in parsed}
+    valid = [p.result for p in parsed if isinstance(p.result, Candidate)]
+    return {c.email for c in valid}, {c.legacy_id for c in valid}
 
 
-def plan_import(rows: Iterable[ImportRow], existing: ExistingCandidates) -> ImportPlan:
+def plan_import(parsed_rows: Iterable[ParsedRow], existing: Sequence[Candidate]) -> ImportPlan:
+    """Place every parsed row. ``existing`` holds the stored Candidates sharing
+    an email or Legacy ID with the file, looked up in bulk beforehand."""
     plan = ImportPlan()
-    stored = {c.email: c for c in existing.candidates}
+    stored = {c.email: c for c in existing}
     # email -> the Candidate it identifies, with the blanks filled so far
     first_seen: dict[str, Candidate] = dict(stored)
     # Legacy ID -> email of the Candidate holding it
-    legacy_id_owners = {c.legacy_id: c.email for c in existing.candidates}
+    legacy_id_owners = {c.legacy_id: c.email for c in existing}
     new_emails: list[str] = []
 
-    for row in rows:
-        parsed = parse_candidate(row)
+    for item in parsed_rows:
+        row, parsed = item.row, item.result
         if isinstance(parsed, Rejection):
             plan.rejections.append(parsed)
             continue

@@ -8,9 +8,9 @@ and deselected by default; run them with:
     cd backend && uv run playwright install chromium   # once
     uv run pytest -m e2e
 
-If the stack isn't reachable the tests are skipped. The expected totals assume
-the stack's database holds only the provided CSV (a fresh ``docker compose
-down -v`` stack, or one that has only been imported into). ``E2E_UI_URL`` and ``E2E_API_URL`` override the defaults.
+If the stack isn't reachable the tests are skipped. Expected totals are read
+from the API for the same Recruiter, so extra imports into the stack's database
+don't break the suite. ``E2E_UI_URL`` and ``E2E_API_URL`` override the defaults.
 
 Data setup is deterministic: the real CSV is imported through the API before
 any assertion. Re-import is idempotent, so running the suite twice is safe.

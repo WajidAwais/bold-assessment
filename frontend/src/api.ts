@@ -1,5 +1,9 @@
 // Plain fetch wrappers for the backend. Types mirror the API's response models.
 
+// The four canonical statuses; the API rejects anything else with 422.
+export const STATUSES = ["active", "screening", "interviewing", "withdrawn"] as const;
+export type Status = (typeof STATUSES)[number];
+
 export type CandidateListItem = {
   id: number;
   legacy_id: string;
@@ -55,8 +59,19 @@ export function fetchRecruiters(): Promise<Recruiter[]> {
   return getJson<Recruiter[]>("/api/v1/recruiters");
 }
 
-export function fetchCandidates(recruiterId: string, page: number): Promise<CandidateList> {
+export type CandidateQuery = {
+  search: string;
+  status: Status | null;
+  page: number;
+};
+
+export function fetchCandidates(
+  recruiterId: string,
+  { search, status, page }: CandidateQuery,
+): Promise<CandidateList> {
   const params = new URLSearchParams({ page: String(page) });
+  if (search) params.set("search", search);
+  if (status) params.set("status", status);
   return getJson<CandidateList>(`/api/v1/candidates?${params}`, {
     headers: { "X-Recruiter-Id": recruiterId },
   });

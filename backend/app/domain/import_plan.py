@@ -4,10 +4,10 @@
 Import Report entries. Every row ends up in exactly one bucket: new Candidate,
 Merge or Rejection. Nothing is dropped silently.
 
-Walking skeleton: a row that fails the Candidate model is rejected with a
-generic reason, and a row whose email or Legacy ID is already taken is rejected
-as a duplicate. Ticket 03 brings the precise reasons and ticket 04 replaces the
-duplicate rejection with first-seen Merge and ID Collision detection.
+A row that fails the Candidate model is rejected with every reason, each using
+a fixed prefix. Until ticket 04 brings first-seen Merge and ID Collision
+detection, a row whose email or Legacy ID is already taken is rejected as a
+duplicate.
 """
 
 from collections.abc import Iterable, Mapping, Set
@@ -86,8 +86,6 @@ _INVALID_REASONS: Mapping[str, str] = {
     "region": "unknown region",
     "status": "unknown status",
     "applied_date": "invalid date",
-    "first_name": "invalid characters in first_name",
-    "last_name": "invalid characters in last_name",
 }
 
 
@@ -104,9 +102,12 @@ def parse_candidate(row: ImportRow) -> Candidate | Rejection:
 
 def _reason(error: Mapping[str, Any]) -> str:
     field = str(error["loc"][0])
+    column = _COLUMN_FOR_FIELD[field]
     if error["input"] is None:  # blanks were nulled before validation
-        return f"missing {_COLUMN_FOR_FIELD[field]}"
-    return _INVALID_REASONS.get(field, f"invalid {_COLUMN_FOR_FIELD[field]}")
+        return f"missing {column}"
+    if error["type"] == "invalid_characters":
+        return f"invalid characters in {column}"
+    return _INVALID_REASONS.get(field, f"invalid {column}")
 
 
 def lookup_keys(rows: Iterable[ImportRow]) -> tuple[set[str], set[str]]:

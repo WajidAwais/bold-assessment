@@ -222,3 +222,174 @@ def test_impossible_or_unknown_dates_are_rejected(applied):
         f"Full-Stack Engineer,90000,{applied},Active,Indeed,Impossible calendar date"
     )
     assert rejected_reason(record) == "invalid date"
+
+
+# --- Salary ----------------------------------------------------------------
+
+
+def _with_salary(salary: str) -> str:
+    # C-1001 with its salary swapped for the case under test
+    return (
+        "C-1001,Alicia,Trent,alicia.trent@gmail.com,+1 (734) 555-0142,US-MW,"
+        f"Full-Stack Engineer,{salary},2026-05-14,Active,LinkedIn,Strong React portfolio"
+    )
+
+
+@pytest.mark.parametrize(
+    ("salary", "expected"),
+    [
+        ('"$95,000"', 95000),  # C-1001
+        ('"97,500"', 97500),  # C-1004
+        ("88000", 88000),  # C-1002
+        ("85k", 85000),  # C-1046
+        ("85K", 85000),
+        ("negotiable", None),  # C-1047
+        ("", None),  # C-1048
+        ("0", None),  # not a positive integer
+        ("-5000", None),
+        ("95000.50", None),
+    ],
+)
+def test_salary_becomes_a_whole_number_or_a_soft_null(salary, expected):
+    assert accepted(_with_salary(salary)).salary == expected
+
+
+# --- Names -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("record", "first_name", "last_name"),
+    [
+        (
+            "C-1008,Nguyễn,Thị Hoa,hoa.nguyen@gmail.com,+63 905 555 0161,PH-MNL,"
+            "Frontend Engineer,48000,2026-05-25,Interviewing,Referral,"
+            "Unicode name — display must not mangle",
+            "Nguyễn",
+            "Thị Hoa",
+        ),
+        (
+            "C-1006,Tomás,Herrera,tomas.herrera@gmail.com,+57 601 555 0177,CO-BOG,"
+            "Full-Stack Engineer,72000,2026-05-22,Active,LinkedIn,Bilingual EN/ES",
+            "Tomás",
+            "Herrera",
+        ),
+        (
+            "C-1015,Jürgen,Müller,jurgen.mueller@gmail.com,+1 646 555 0183,US-NE,"
+            "Backend Engineer,105000,2026-06-03,Active,LinkedIn,Relocating from Berlin",
+            "Jürgen",
+            "Müller",
+        ),
+        (
+            "C-1049,Maya,Castellanos-Ruiz,maya.cr@gmail.com,(505) 555-0141,US-W,"
+            "Full-Stack Engineer,107000,2026-07-10,Active,Referral,"
+            '"Prefers remote, but open to hybrid in Denver, CO"',
+            "Maya",
+            "Castellanos-Ruiz",
+        ),
+        (
+            "C-1032,A.,Diallo,amara.diallo@gmail.com,917-555-9999,US-NE,"
+            'Full-Stack Engineer,"$110,000",2026-06-20,Active,Indeed,Which record wins?',
+            "A.",
+            "Diallo",
+        ),
+        (  # variant of C-1036 with a real apostrophe name
+            "C-1036,Robert,O'Connor,robert.oconnor@gmail.com,(508) 555-0121,US-NE,"
+            "Full-Stack Engineer,101000,2026-06-26,Active,LinkedIn,",
+            "Robert",
+            "O'Connor",
+        ),
+        (  # variant of C-1006, decomposed: "a" + combining acute accent
+            "C-1006,Tomás,Herrera,tomas.herrera@gmail.com,+57 601 555 0177,CO-BOG,"
+            "Full-Stack Engineer,72000,2026-05-22,Active,LinkedIn,Bilingual EN/ES",
+            "Tomás",
+            "Herrera",
+        ),
+    ],
+)
+def test_names_in_any_script_are_accepted_and_nfc_normalized(record, first_name, last_name):
+    candidate = accepted(record)
+    assert (candidate.first_name, candidate.last_name) == (first_name, last_name)
+
+
+@pytest.mark.parametrize(
+    ("record", "reason"),
+    [
+        (
+            "C-1036,Robert,O'Connor'); DROP TABLE candidates;--,robert.oconnor@gmail.com,"
+            "(508) 555-0121,US-NE,Full-Stack Engineer,101000,2026-06-26,Active,LinkedIn,"
+            "Classic injection probe in last_name",
+            "invalid characters in last_name",
+        ),
+        (  # variant of C-1007: a digit in the first name
+            "C-1007,Gr4ce,Lim,grace.lim@gmail.com,+63 917 555 0122,PH-MNL,"
+            "QA Engineer,45000,2026-05-23,Active,JobStreet,",
+            "invalid characters in first_name",
+        ),
+        (  # variant of C-1007: first name blank
+            "C-1007,,Lim,grace.lim@gmail.com,+63 917 555 0122,PH-MNL,"
+            "QA Engineer,45000,2026-05-23,Active,JobStreet,",
+            "missing first_name",
+        ),
+        (  # variant of C-1007: a 101-character last name
+            f"C-1007,Grace,{'L' * 101},grace.lim@gmail.com,+63 917 555 0122,PH-MNL,"
+            "QA Engineer,45000,2026-05-23,Active,JobStreet,",
+            "invalid last_name",
+        ),
+    ],
+)
+def test_names_with_non_name_characters_are_rejected(record, reason):
+    assert rejected_reason(record) == reason
+
+
+# --- Free-text fields ------------------------------------------------------
+
+
+def test_free_text_fields_are_trimmed_and_otherwise_verbatim():
+    # C-1050's multi-line note, with padding added around phone, role and source
+    record = (
+        "C-1050,Oliver,Grant,oliver.grant@gmail.com,  (802) 555-0168 ,US-NE,"
+        " Data Engineer ,103000,2026-07-13,Active, LinkedIn ,\"Interview notes:\n"
+        "Round 1 passed.\nRound 2 pending scheduling.\""
+    )
+    candidate = accepted(record)
+    assert candidate.phone == "(802) 555-0168"
+    assert candidate.desired_role == "Data Engineer"
+    assert candidate.source == "LinkedIn"
+    assert candidate.notes == "Interview notes:\nRound 1 passed.\nRound 2 pending scheduling."
+
+
+def test_sql_looking_notes_are_kept_as_text():
+    record = (
+        "C-1037,Dana,Whitlock,dana.whitlock@gmail.com,702-555-0163,US-W,"
+        "Frontend Engineer,87000,2026-06-29,Active,Indeed,' OR '1'='1"
+    )
+    assert accepted(record).notes == "' OR '1'='1"
+
+
+# --- Rejections ------------------------------------------------------------
+
+
+def test_a_rejection_lists_every_problem_in_column_order():
+    # C-1033 with a bad name, region, date and status as well as its bad email
+    record = (
+        "C-1033,Marcus,Re;ed,marcus.reed[at]gmail.com,(213) 555-0144,ZZ-99,"
+        "Backend Engineer,100000,2026-02-30,actve,LinkedIn,"
+    )
+    result = parse(record, row=34)
+    assert result == Rejection(
+        row=34,
+        candidate_id="C-1033",
+        reason=(
+            "invalid characters in last_name; invalid email; unknown region; "
+            "invalid date; unknown status"
+        ),
+    )
+
+
+def test_a_row_without_a_legacy_id_is_rejected():
+    record = (
+        ",Alicia,Trent,alicia.trent@gmail.com,+1 (734) 555-0142,US-MW,"
+        'Full-Stack Engineer,"$95,000",2026-05-14,Active,LinkedIn,Strong React portfolio'
+    )
+    result = parse(record, row=1)
+    assert result == Rejection(row=1, candidate_id=None, reason="missing candidate_id")

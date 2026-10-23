@@ -1,16 +1,20 @@
 """The Candidate model and its canonical vocabularies. Pure Python, no I/O.
 
-Walking-skeleton rules only: values are trimmed, blanks become null, emails are
-lowercased, and Region/status must already be (case-insensitively) canonical.
-The full normalization rules arrive in ticket 03.
+Validating a Candidate applies every normalization rule from the spec: values
+are trimmed and blanks become null; emails are lowercased and must be valid;
+Region and status are matched exactly after folding; dates come in one of three
+legacy formats; salaries become whole numbers or a soft null; names are
+NFC-normalized and allow-listed. Nothing is ever repaired by guessing.
 """
 
 import re
+import unicodedata
 from datetime import date
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, StringConstraints, field_validator
+from pydantic_core import PydanticCustomError
 
 
 class Region(StrEnum):
@@ -66,12 +70,37 @@ def parse_applied_date(value: str) -> date:
     raise ValueError("not a YYYY-MM-DD, MM/DD/YYYY or DD-Mon-YYYY date")
 
 
+# Name characters beyond Unicode letters (L*) and combining marks (M*).
+_NAME_PUNCTUATION = frozenset(" '-.")
+
+
+def normalize_name(value: str) -> str:
+    """NFC-normalize a name; raise if it holds anything but name characters."""
+    value = unicodedata.normalize("NFC", value)
+    for char in value:
+        if char not in _NAME_PUNCTUATION and unicodedata.category(char)[0] not in "LM":
+            raise PydanticCustomError("invalid_characters", "invalid characters in name")
+    return value
+
+
+_SALARY = re.compile(r"([0-9]+)([kK]?)")
+
+
+def parse_salary(value: str) -> int | None:
+    """``$95,000``, ``97,500``, ``85k`` -> whole numbers; anything else -> None."""
+    match = _SALARY.fullmatch(re.sub(r"[$,\s]", "", value))
+    if not match:
+        return None
+    amount = int(match[1]) * (1000 if match[2] else 1)
+    return amount if amount > 0 else None
+
+
 class Candidate(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     legacy_id: str
-    first_name: str
-    last_name: str
+    first_name: Annotated[str, StringConstraints(max_length=100)]
+    last_name: Annotated[str, StringConstraints(max_length=100)]
     email: EmailStr
     phone: str | None = None
     region: Region
@@ -107,11 +136,14 @@ class Candidate(BaseModel):
 
     @field_validator("salary", mode="before")
     @classmethod
-    def _plain_integer_salary(cls, value: Any) -> Any:
-        # Skeleton: only plain digits count; anything else is a soft null.
-        if isinstance(value, str):
-            return int(value) if value.isdigit() else None
-        return value
+    def _salary(cls, value: Any) -> Any:
+        # A soft field: an unreadable salary becomes null, never a Rejection.
+        return parse_salary(value) if isinstance(value, str) else value
+
+    @field_validator("first_name", "last_name", mode="before")
+    @classmethod
+    def _name(cls, value: Any) -> Any:
+        return normalize_name(value) if isinstance(value, str) else value
 
     # Pydantic runs "before" validators in reverse definition order, so this
     # one, defined last, trims and nulls every field before the rules above.

@@ -103,7 +103,7 @@ uv run playwright install chromium   # once
 uv run pytest -m e2e
 ```
 
-The e2e totals assume the stack's database holds only the provided CSV. That
-is true for a fresh stack (`docker compose down -v`) or one that has only been
-imported into. If the stack isn't reachable, the e2e tests are skipped with a
+Each test reads the expected scoped total for its Recruiter from the API and
+checks the UI shows the same, so extra imports into the stack's database don't
+break it. If the stack isn't reachable, the e2e tests are skipped with a
 reason.

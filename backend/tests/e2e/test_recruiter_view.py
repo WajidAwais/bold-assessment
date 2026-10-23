@@ -1,13 +1,43 @@
-"""Recruiter view smoke: Scope, rendering, search and status, as a user sees them."""
+"""Recruiter view smoke: Scope, rendering, search and status, as a user sees them.
 
+Expected totals come from the API for the same Recruiter and filters, never
+from hard-coded counts, so the tests hold whatever else the stack's database
+has been given.
+"""
+
+import httpx
 import pytest
 from playwright.sync_api import Page, expect
+
+from tests.e2e.conftest import API_URL
 
 pytestmark = pytest.mark.e2e
 
 
-def view_as(page: Page, recruiter_name: str) -> None:
+def recruiter_id(full_name: str) -> str:
+    roster = httpx.get(f"{API_URL}/api/v1/recruiters", timeout=5).json()
+    (match,) = [r["id"] for r in roster if r["full_name"] == full_name]
+    return match
+
+
+def api_listing(recruiter_name: str, **params: str) -> dict:
+    """What the API returns to this Recruiter: the source of truth for the UI."""
+    response = httpx.get(
+        f"{API_URL}/api/v1/candidates",
+        params={"page_size": "100", **params},
+        headers={"X-Recruiter-Id": recruiter_id(recruiter_name)},
+        timeout=5,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def view_as(page: Page, recruiter_name: str) -> int:
+    """Switch to the Recruiter, wait for their scoped total, and return it."""
     page.get_by_label("Viewing as").select_option(label=_option_label(page, recruiter_name))
+    total = api_listing(recruiter_name)["total"]
+    expect_total(page, total)
+    return total
 
 
 def _option_label(page: Page, recruiter_name: str) -> str:
@@ -25,21 +55,28 @@ def region_cells(page: Page) -> list[str]:
     return page.get_by_role("row").locator("td:nth-child(3)").all_inner_texts()
 
 
-def test_caleb_sees_only_us_mw_and_us_ne(recruiter_view: Page) -> None:
-    view_as(recruiter_view, "Caleb Nguyen")
+def name_cells(page: Page) -> list[str]:
+    return page.get_by_role("row").locator("td:nth-child(1)").all_inner_texts()
 
-    expect_total(recruiter_view, 18)
+
+def full_names(listing: dict) -> list[str]:
+    return sorted(f"{c['first_name']} {c['last_name']}" for c in listing["items"])
+
+
+def test_caleb_sees_only_us_mw_and_us_ne(recruiter_view: Page) -> None:
+    total = view_as(recruiter_view, "Caleb Nguyen")
+
+    assert total > 0
     assert set(region_cells(recruiter_view)) == {"US-MW", "US-NE"}
 
 
 def test_switching_to_marisol_leaves_none_of_calebs_rows(recruiter_view: Page) -> None:
     view_as(recruiter_view, "Caleb Nguyen")
-    expect_total(recruiter_view, 18)
     expect(recruiter_view.get_by_role("cell", name="Alicia Trent")).to_have_count(1)
 
-    view_as(recruiter_view, "Marisol Vega")
+    total = view_as(recruiter_view, "Marisol Vega")
 
-    expect_total(recruiter_view, 9)
+    assert total > 0
     assert set(region_cells(recruiter_view)) == {"PH-MNL", "CO-BOG"}
     expect(recruiter_view.get_by_role("cell", name="Alicia Trent")).to_have_count(0)
     expect(recruiter_view.get_by_role("cell", name="Priya Raman")).to_have_count(0)
@@ -47,30 +84,28 @@ def test_switching_to_marisol_leaves_none_of_calebs_rows(recruiter_view: Page) -
 
 def test_vietnamese_name_renders_intact(recruiter_view: Page) -> None:
     view_as(recruiter_view, "Marisol Vega")
-    expect_total(recruiter_view, 9)
 
     expect(recruiter_view.get_by_role("cell", name="Nguyễn Thị Hoa", exact=True)).to_be_visible()
 
 
-def name_cells(page: Page) -> list[str]:
-    return page.get_by_role("row").locator("td:nth-child(1)").all_inner_texts()
-
-
 def test_search_narrows_the_table(recruiter_view: Page) -> None:
-    view_as(recruiter_view, "Caleb Nguyen")
-    expect_total(recruiter_view, 18)
+    unfiltered = view_as(recruiter_view, "Caleb Nguyen")
+    expected = api_listing("Caleb Nguyen", search="Raman")
 
     recruiter_view.get_by_label("Search").fill("Raman")
 
-    expect_total(recruiter_view, 1)
-    assert name_cells(recruiter_view) == ["Priya Raman"]
+    assert 0 < expected["total"] < unfiltered
+    expect_total(recruiter_view, expected["total"])
+    assert "Priya Raman" in name_cells(recruiter_view)
+    assert sorted(name_cells(recruiter_view)) == full_names(expected)
 
 
 def test_status_filter_narrows_the_table(recruiter_view: Page) -> None:
-    view_as(recruiter_view, "Caleb Nguyen")
-    expect_total(recruiter_view, 18)
+    unfiltered = view_as(recruiter_view, "Caleb Nguyen")
+    expected = api_listing("Caleb Nguyen", status="interviewing")
 
     recruiter_view.get_by_label("Status").select_option("interviewing")
 
-    expect_total(recruiter_view, 2)
-    assert sorted(name_cells(recruiter_view)) == ["Priya Raman", "Trevor Nash"]
+    assert 0 < expected["total"] < unfiltered
+    expect_total(recruiter_view, expected["total"])
+    assert sorted(name_cells(recruiter_view)) == full_names(expected)

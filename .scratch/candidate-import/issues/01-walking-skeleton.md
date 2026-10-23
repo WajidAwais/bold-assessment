@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] Monorepo with backend and frontend. Compose runs Postgres 16, the API (runs `alembic upgrade head` on start, then serves) and the Vite dev server (proxies `/api`). A `.env.example` holds the dev defaults.
 - [x] An Alembic migration creates `candidates` (surrogate key, unique email, unique Legacy ID, canonical Region and status constraints) and `recruiters`, and seeds the 5 Recruiters from the roster.

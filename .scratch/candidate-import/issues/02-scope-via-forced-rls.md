@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Walking skeleton
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] A migration creates the non-owner `techforce_app` role (no `BYPASSRLS`) with read grants, and enables **and forces** RLS on `candidates`. The policy admits a row when the Recruiter in the transaction-local `app.recruiter_id` setting is an Admin or has the row's Region assigned. No setting means no rows.
 - [x] Reads go through a scoped connection: open a transaction, `set_config('app.recruiter_id', id, true)`, then query. The import keeps using an explicitly named owner connection.

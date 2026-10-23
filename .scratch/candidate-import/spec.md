@@ -1,6 +1,6 @@
 # Spec: Candidate Import & Scoped Recruiter View
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 

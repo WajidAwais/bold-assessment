@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Walking skeleton
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] Pydantic v2 Candidate model. Required: email, first name, last name, Region, status. Everything else is nullable.
 - [x] Email: trimmed, lowercased, `EmailStr` (offline). `[at]`, missing `@` and empty emails are rejected, never repaired.

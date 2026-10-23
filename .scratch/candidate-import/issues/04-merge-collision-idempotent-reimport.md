@@ -4,7 +4,7 @@
 
 **Blocked by:** 03: Validation, normalization and Rejections
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] Existing emails and Legacy IDs are looked up in bulk, in a single query (no per-row lookups). Inserts and blank-fills are batched, all inside one transaction.
 - [x] First-seen wins within a file and against the database. Later rows fill only null fields.

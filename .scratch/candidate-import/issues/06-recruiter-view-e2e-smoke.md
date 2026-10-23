@@ -4,7 +4,7 @@
 
 **Blocked by:** 05: Search, status filter and pagination
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] Selecting Caleb shows only US-MW and US-NE rows.
 - [x] Switching to Marisol shows only PH-MNL and CO-BOG rows, and none of Caleb's rows remain visible.

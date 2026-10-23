@@ -4,7 +4,7 @@
 
 **Blocked by:** 02: Scope enforced by forced RLS, plus Recruiter switcher
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] `search` is a case-insensitive substring match on first name, last name, full name, email and desired role. `%`, `_` and `\` are escaped. Matching is accent-sensitive.
 - [x] `status` is optional and must be one of the four values (case-insensitive). Anything else → 422.

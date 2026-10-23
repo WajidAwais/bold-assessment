@@ -4,7 +4,7 @@
 
 **Blocked by:** 04: Merge, ID Collision and idempotent re-import; 05: Search, status filter and pagination; 06: Recruiter view end-to-end smoke
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] README: a clean-machine quick start (`docker compose up` → open the UI → a one-line `curl` import sending the Admin header `X-Recruiter-Id: R-101`), local development (`uv`, npm), and running the tests, including the `e2e` marker.
 - [x] NOTES.md (half a page to a page) covers:

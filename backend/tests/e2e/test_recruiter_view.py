@@ -16,7 +16,7 @@ def _option_label(page: Page, recruiter_name: str) -> str:
 
 
 def expect_total(page: Page, total: int) -> None:
-    """Wait for the scoped total; the leading "· " keeps 19 from passing for 9."""
+    """Wait for the scoped total; the leading "· " keeps 18 from passing for 8."""
     pager = page.get_by_role("navigation", name="Pagination")
     expect(pager).to_contain_text(f"· {total} candidates")
 
@@ -28,13 +28,13 @@ def region_cells(page: Page) -> list[str]:
 def test_caleb_sees_only_us_mw_and_us_ne(recruiter_view: Page) -> None:
     view_as(recruiter_view, "Caleb Nguyen")
 
-    expect_total(recruiter_view, 19)
+    expect_total(recruiter_view, 18)
     assert set(region_cells(recruiter_view)) == {"US-MW", "US-NE"}
 
 
 def test_switching_to_marisol_leaves_none_of_calebs_rows(recruiter_view: Page) -> None:
     view_as(recruiter_view, "Caleb Nguyen")
-    expect_total(recruiter_view, 19)
+    expect_total(recruiter_view, 18)
     expect(recruiter_view.get_by_role("cell", name="Alicia Trent")).to_have_count(1)
 
     view_as(recruiter_view, "Marisol Vega")
@@ -58,7 +58,7 @@ def name_cells(page: Page) -> list[str]:
 
 def test_search_narrows_the_table(recruiter_view: Page) -> None:
     view_as(recruiter_view, "Caleb Nguyen")
-    expect_total(recruiter_view, 19)
+    expect_total(recruiter_view, 18)
 
     recruiter_view.get_by_label("Search").fill("Raman")
 
@@ -68,7 +68,7 @@ def test_search_narrows_the_table(recruiter_view: Page) -> None:
 
 def test_status_filter_narrows_the_table(recruiter_view: Page) -> None:
     view_as(recruiter_view, "Caleb Nguyen")
-    expect_total(recruiter_view, 19)
+    expect_total(recruiter_view, 18)
 
     recruiter_view.get_by_label("Status").select_option("interviewing")
 

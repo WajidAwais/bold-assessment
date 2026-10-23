@@ -5,11 +5,12 @@ stack** (UI on 127.0.0.1:5173, API on 127.0.0.1:8000). They are marked ``e2e``
 and deselected by default; run them with:
 
     docker compose up -d --build
-    cd backend && uv run pytest -m e2e --browser-channel chrome
+    cd backend && uv run playwright install chromium   # once
+    uv run pytest -m e2e
 
-(``--browser-channel chrome`` uses the installed Google Chrome; without it run
-``uv run playwright install chromium`` once.) If the stack isn't reachable the
-tests are skipped. ``E2E_UI_URL`` and ``E2E_API_URL`` override the defaults.
+If the stack isn't reachable the tests are skipped. The expected totals assume
+the stack's database holds only the provided CSV (a fresh ``docker compose
+down -v`` stack, or one that has only been imported into). ``E2E_UI_URL`` and ``E2E_API_URL`` override the defaults.
 
 Data setup is deterministic: the real CSV is imported through the API before
 any assertion. Re-import is idempotent, so running the suite twice is safe.

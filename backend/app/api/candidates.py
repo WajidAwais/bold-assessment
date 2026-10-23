@@ -26,11 +26,12 @@ async def import_candidates(file: UploadFile, owner_engine: OwnerEngine) -> Impo
 async def list_candidates(
     app_engine: AppEngine,
     recruiter_id: CurrentRecruiterId,
+    search: Annotated[str | None, Query(max_length=200)] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 25,
 ) -> CandidateListOut:
     result = await candidate_service.list_candidates(
-        app_engine, recruiter_id=recruiter_id, page=page, page_size=page_size
+        app_engine, recruiter_id=recruiter_id, search=search, page=page, page_size=page_size
     )
     return CandidateListOut(
         items=[CandidateListItem.model_validate(dict(item)) for item in result.items],

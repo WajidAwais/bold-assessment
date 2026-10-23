@@ -31,7 +31,7 @@ testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
 # e2e drives the browser against the running compose stack; it's deselected by
-# default. Run it with `uv run pytest -m e2e --browser-channel chrome`.
+# default. Run it with `uv run pytest -m e2e` (after `uv run playwright install chromium`).
 addopts = ["-m", "not e2e"]
 markers = [
     "e2e: Recruiter view browser tests; need the compose stack running (docker compose up -d)",

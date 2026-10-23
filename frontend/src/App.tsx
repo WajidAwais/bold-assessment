@@ -29,6 +29,11 @@ export function App() {
   // the same render, so no request for a stale page is ever made.
   const filtersKey = JSON.stringify([recruiterId, search, status]);
   const [pageState, setPageState] = useState({ filtersKey, page: 1 });
+  if (pageState.filtersKey !== filtersKey) {
+    // Store the reset too (React's "adjust state while rendering"), or going
+    // back to earlier filters would bring back the page they were on.
+    setPageState({ filtersKey, page: 1 });
+  }
   const page = pageState.filtersKey === filtersKey ? pageState.page : 1;
   const setPage = (next: number) => setPageState({ filtersKey, page: next });
 

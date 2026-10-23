@@ -12,6 +12,7 @@ duplicate rejection with first-seen Merge and ID Collision detection.
 
 from collections.abc import Iterable, Mapping, Set
 from dataclasses import dataclass, field
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -76,13 +77,36 @@ class ImportPlan:
     rejections: list[Rejection] = field(default_factory=list)
 
 
+# Candidate field -> CSV column, so reasons name the column the Admin must fix.
+_COLUMN_FOR_FIELD: Mapping[str, str] = {field: column for column, field in CSV_COLUMNS.items()}
+
+# The fixed reason for a present-but-unusable value, per Candidate field.
+_INVALID_REASONS: Mapping[str, str] = {
+    "email": "invalid email",
+    "region": "unknown region",
+    "status": "unknown status",
+    "applied_date": "invalid date",
+    "first_name": "invalid characters in first_name",
+    "last_name": "invalid characters in last_name",
+}
+
+
 def parse_candidate(row: ImportRow) -> Candidate | Rejection:
+    """Normalize one record into a Candidate, or reject it with every reason."""
     data = {model_field: row.values.get(column) for column, model_field in CSV_COLUMNS.items()}
     try:
         return Candidate.model_validate(data)
     except ValidationError as exc:
-        fields = sorted({str(error["loc"][0]) for error in exc.errors() if error["loc"]})
-        return Rejection(row.row, row.candidate_id, f"invalid {', '.join(fields)}")
+        reasons = [_reason(error) for error in exc.errors()]
+        # One reason per field, in CSV column order (Pydantic reports in field order).
+        return Rejection(row.row, row.candidate_id, "; ".join(dict.fromkeys(reasons)))
+
+
+def _reason(error: Mapping[str, Any]) -> str:
+    field = str(error["loc"][0])
+    if error["input"] is None:  # blanks were nulled before validation
+        return f"missing {_COLUMN_FOR_FIELD[field]}"
+    return _INVALID_REASONS.get(field, f"invalid {_COLUMN_FOR_FIELD[field]}")
 
 
 def lookup_keys(rows: Iterable[ImportRow]) -> tuple[set[str], set[str]]:

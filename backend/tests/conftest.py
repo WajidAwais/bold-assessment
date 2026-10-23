@@ -27,9 +27,12 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_DIR.parent
 
 
+def _test_database_name() -> str:
+    return os.environ.get("TEST_DATABASE_NAME", "techforce_test")
+
+
 def _test_database_url() -> URL:
-    database_name = os.environ.get("TEST_DATABASE_NAME", "techforce_test")
-    return make_url(Settings().database_url).set(database=database_name)
+    return make_url(Settings().database_url).set(database=_test_database_name())
 
 
 async def _create_database_if_missing(url: URL) -> None:
@@ -66,12 +69,22 @@ def test_database_url() -> URL:
 
 
 @pytest.fixture(scope="session")
-async def app(test_database_url: URL):
+def app_role_url(test_database_url: URL) -> URL:
+    """The test database, as the non-owner ``techforce_app`` role."""
+    return make_url(Settings().app_database_url).set(database=test_database_url.database)
+
+
+@pytest.fixture(scope="session")
+async def app(test_database_url: URL, app_role_url: URL):
     app = create_app(
-        Settings(database_url=test_database_url.render_as_string(hide_password=False))
+        Settings(
+            database_url=test_database_url.render_as_string(hide_password=False),
+            app_database_url=app_role_url.render_as_string(hide_password=False),
+        )
     )
     yield app
     await app.state.owner_engine.dispose()
+    await app.state.app_engine.dispose()
 
 
 @pytest.fixture(autouse=True)

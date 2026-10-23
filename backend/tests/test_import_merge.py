@@ -44,6 +44,7 @@ async def _import(client: httpx.AsyncClient, csv_bytes: bytes) -> dict:
     response = await client.post(
         "/api/v1/candidates/import",
         files={"file": ("candidates_import.csv", csv_bytes, "text/csv")},
+        headers={"X-Recruiter-Id": "R-101"},
     )
     assert response.status_code == 200, response.text
     return response.json()

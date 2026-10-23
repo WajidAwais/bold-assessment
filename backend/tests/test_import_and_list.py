@@ -25,6 +25,7 @@ async def _import(client: httpx.AsyncClient, csv_bytes: bytes) -> httpx.Response
     return await client.post(
         "/api/v1/candidates/import",
         files={"file": ("candidates_import.csv", csv_bytes, "text/csv")},
+        headers={"X-Recruiter-Id": "R-101"},
     )
 
 

@@ -66,7 +66,7 @@ async def test_a_row_that_does_not_fit_is_reported_as_a_rejection(client):
 
     assert report["imported"] == 1
     assert [(r["row"], r["candidate_id"]) for r in report["rejected"]] == [(2, "C-1033")]
-    assert report["rejected"][0]["reason"]
+    assert report["rejected"][0]["reason"] == "invalid email"
 
 
 async def test_every_row_of_the_real_export_is_accounted_for(client, candidates_csv):

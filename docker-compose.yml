@@ -1,0 +1,41 @@
+name: techforce
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-techforce}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-techforce}
+      POSTGRES_DB: ${POSTGRES_DB:-techforce}
+    ports:
+      # Host 5433, so a locally installed Postgres on 5432 doesn't clash.
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-techforce}:${POSTGRES_PASSWORD:-techforce}@db:5432/${POSTGRES_DB:-techforce}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  web:
+    build: ./frontend
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "5173:5173"
+
+volumes:
+  pgdata:
